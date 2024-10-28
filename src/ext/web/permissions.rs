@@ -230,14 +230,14 @@ impl deno_net::NetPermissions for PermissionsContainer {
         self.0.check_host(host.0.as_ref(), host.1, api_name)
     }
 
-    fn check_read<'a>(
+    fn check_read(
         &mut self,
-        p: &'a str,
+        p: &str,
         api_name: &str,
     ) -> Result<PathBuf, deno_core::error::AnyError> {
         self.0
             .check_read(Path::new(p), api_name)
-            .map(|p| p.into_owned())
+            .map(std::borrow::Cow::into_owned)
     }
 
     fn check_write(
@@ -247,7 +247,7 @@ impl deno_net::NetPermissions for PermissionsContainer {
     ) -> Result<PathBuf, deno_core::error::AnyError> {
         self.0
             .check_write(Path::new(p), api_name)
-            .map(|p| p.into_owned())
+            .map(std::borrow::Cow::into_owned)
     }
 
     fn check_write_path<'a>(
