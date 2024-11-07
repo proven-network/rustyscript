@@ -52,7 +52,7 @@ web_stub = ["webidl", "base64-simd"]
     # Timers, events, text encoder/decoder,
     # [https://w3c.github.io/FileAPI]
     # [https://fetch.spec.whatwg.org/]
-    web = ["deno_web", "webidl", "deno_tls", "deno_fetch", "deno_net", "console", "url", "crypto", "url_import", "fs_import", "http"]
+    web = ["deno_web", "webidl", "deno_tls", "deno_fetch", "deno_net", "deno_permissions", "console", "url", "crypto", "url_import", "fs_import", "http"]
 
     # [https://webidl.spec.whatwg.org/]
     webidl = ["deno_webidl"]
@@ -108,20 +108,21 @@ http = { version = "1.1.0", optional = true }
 # Dependencies for the various extension features
 #
 
-deno_cache      = {path = "../deno/ext/cache", optional = true}
-deno_console    = {path = "../deno/ext/console", optional = true}
-deno_crypto     = {path = "../deno/ext/crypto", optional = true}
-deno_fetch      = {path = "../deno/ext/fetch", optional = true}
-deno_net        = {path = "../deno/ext/net", optional = true}
-deno_tls        = {path = "../deno/ext/tls", optional = true} # Options for the web feature
-deno_url        = {path = "../deno/ext/url", optional = true}
+deno_cache      = {workspace = true, optional = true}
+deno_console    = {workspace = true, optional = true}
+deno_crypto     = {workspace = true, optional = true}
+deno_fetch      = {workspace = true, optional = true}
+deno_net        = {workspace = true, optional = true}
+deno_tls        = {workspace = true, optional = true} # Options for the web feature
+deno_url        = {workspace = true, optional = true}
 
-deno_web        = {path = "../deno/ext/web", optional = true}
-deno_webidl     = {path = "../deno/ext/webidl", optional = true}
-deno_webstorage = {path = "../deno/ext/webstorage", optional = true}
-deno_websocket  = {path = "../deno/ext/websocket", optional = true}
+deno_web        = {workspace = true, optional = true}
+deno_webidl     = {workspace = true, optional = true}
+deno_webstorage = {workspace = true, optional = true}
+deno_websocket  = {workspace = true, optional = true}
 
-deno_io         = {path = "../deno/ext/io", optional = true}
+deno_io         = {workspace = true, optional = true}
+deno_permissions = {workspace = true, optional = true}
 
 deno_unsync = "0.4.1"
 
