@@ -1,7 +1,7 @@
-use std::path::Path;
-
 use crate::traits::ToModuleSpecifier;
 use crate::{Error, Module, ModuleWrapper, Runtime, RuntimeOptions};
+use deno_core::ModuleSpecifier;
+use std::path::Path;
 
 /// Evaluate a piece of non-ECMAScript-module JavaScript code
 /// Effects on the global scope will not persist
@@ -84,6 +84,8 @@ pub fn import(path: &str) -> Result<ModuleWrapper, Error> {
 /// Resolve a path to absolute path, relative to the current working directory
 /// or an optional base directory
 ///
+/// The resulting `ModuleSpecifier` is a wrapper around `reqwest::Url`
+///
 /// # Arguments
 /// * `path` - A path
 /// * `base_dir` - An optional base directory to resolve the path from
@@ -95,11 +97,19 @@ pub fn import(path: &str) -> Result<ModuleWrapper, Error> {
 /// # Example
 ///
 /// ```rust
-/// let full_path = rustyscript::resolve_path("test.js", None).expect("Something went wrong!");
-/// assert!(full_path.ends_with("test.js"));
+/// rustyscript::resolve_path("test.js", None).expect("Something went wrong!");
 /// ```
-pub fn resolve_path(path: &str, base_dir: Option<&Path>) -> Result<String, Error> {
-    Ok(path.to_module_specifier(base_dir)?.to_string())
+pub fn resolve_path(
+    path: impl AsRef<std::path::Path>,
+    base_dir: Option<&Path>,
+) -> Result<ModuleSpecifier, Error> {
+    let path = path.as_ref();
+    let url = match base_dir {
+        Some(dir) => path.to_module_specifier(dir),
+        None => path.to_module_specifier(&std::env::current_dir()?),
+    }?;
+
+    Ok(url)
 }
 
 /// Explicitly initialize the V8 platform
@@ -289,6 +299,7 @@ mod test_runtime {
     fn test_resolve_path() {
         assert!(resolve_path("test.js", None)
             .expect("invalid path")
+            .to_string()
             .ends_with("test.js"));
     }
 }

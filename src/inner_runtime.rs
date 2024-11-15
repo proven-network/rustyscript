@@ -2,21 +2,55 @@ use crate::{
     ext,
     module_loader::{LoaderOptions, RustyLoader},
     traits::{ToDefinedValue, ToModuleSpecifier, ToV8String},
-    transpiler::{transpile, transpile_extension},
-    Error, ExtensionOptions, Module, ModuleHandle,
+    transpiler::transpile,
+    utilities, Error, ExtensionOptions, Module, ModuleHandle,
 };
 use deno_core::{
-    futures::FutureExt, serde_json, serde_v8::from_v8, v8, JsRuntime, PollEventLoopOptions,
+    futures::FutureExt, serde_json, serde_v8::from_v8, v8, JsRuntime, JsRuntimeForSnapshot,
+    PollEventLoopOptions,
 };
 use serde::de::DeserializeOwned;
 use std::{
     collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
     pin::Pin,
     rc::Rc,
     task::Poll,
     time::Duration,
 };
 use tokio_util::sync::CancellationToken;
+
+/// Wrapper trait to make the `InnerRuntime` generic over the runtime types
+pub trait RuntimeTrait {
+    fn try_new(options: deno_core::RuntimeOptions) -> Result<Self, Error>
+    where
+        Self: Sized;
+    fn rt_mut(&mut self) -> &mut JsRuntime;
+}
+impl RuntimeTrait for JsRuntime {
+    fn try_new(options: deno_core::RuntimeOptions) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
+        let rt = Self::try_new(options)?;
+        Ok(rt)
+    }
+    fn rt_mut(&mut self) -> &mut JsRuntime {
+        self
+    }
+}
+impl RuntimeTrait for JsRuntimeForSnapshot {
+    fn try_new(options: deno_core::RuntimeOptions) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
+        let rt = Self::try_new(options)?;
+        Ok(rt)
+    }
+    fn rt_mut(&mut self) -> &mut JsRuntime {
+        self
+    }
+}
 
 /// Represents a function that can be registered with the runtime
 pub trait RsFunction:
@@ -147,29 +181,39 @@ impl Default for RuntimeOptions {
 /// This struct is not intended to be used directly by the end user
 /// It provides a set of async functions that can be used to interact with the
 /// underlying deno runtime instance
-pub struct InnerRuntime {
+pub struct InnerRuntime<RT: RuntimeTrait> {
     pub module_loader: Rc<RustyLoader>,
-    pub deno_runtime: JsRuntime,
+    pub deno_runtime: RT,
 
+    pub cwd: PathBuf,
     pub default_entrypoint: Option<String>,
 }
-impl InnerRuntime {
+impl<RT: RuntimeTrait> InnerRuntime<RT> {
     pub fn new(
         options: RuntimeOptions,
         heap_exhausted_token: CancellationToken,
     ) -> Result<Self, Error> {
+        let cwd = std::env::current_dir()?;
         let module_loader = Rc::new(RustyLoader::new(LoaderOptions {
             cache_provider: options.module_cache,
             import_provider: options.import_provider,
             schema_whlist: options.schema_whlist,
+            cwd: cwd.clone(),
+
+            #[cfg(feature = "node_experimental")]
+            node_resolver: options.extension_options.node_resolver.clone(),
 
             ..Default::default()
         }));
 
         // If a snapshot is provided, do not reload ESM for extensions
         let is_snapshot = options.startup_snapshot.is_some();
-        let extensions =
-            ext::all_extensions(options.extensions, options.extension_options, is_snapshot);
+        let extensions = ext::all_extensions(
+            options.extensions,
+            options.extension_options,
+            options.shared_array_buffer_store.clone(),
+            is_snapshot,
+        );
 
         // If a heap size is provided, set the isolate params (preserving any user-provided params otherwise)
         let isolate_params = match options.isolate_params {
@@ -190,13 +234,10 @@ impl InnerRuntime {
             }
         };
 
-        let mut deno_runtime = JsRuntime::try_new(deno_core::RuntimeOptions {
+        let mut deno_runtime = RT::try_new(deno_core::RuntimeOptions {
             module_loader: Some(module_loader.clone()),
 
-            extension_transpiler: Some(Rc::new(|specifier, code| {
-                transpile_extension(&specifier, &code)
-            })),
-
+            extension_transpiler: Some(module_loader.as_extension_transpiler()),
             create_params: isolate_params,
             shared_array_buffer_store: options.shared_array_buffer_store.clone(),
 
@@ -208,31 +249,57 @@ impl InnerRuntime {
 
         // Add a callback to terminate the runtime if the max_heap_size limit is approached
         if options.max_heap_size.is_some() {
-            let isolate_handle = deno_runtime.v8_isolate().thread_safe_handle();
+            let isolate_handle = deno_runtime.rt_mut().v8_isolate().thread_safe_handle();
 
-            deno_runtime.add_near_heap_limit_callback(move |current_value, _| {
-                isolate_handle.terminate_execution();
+            deno_runtime
+                .rt_mut()
+                .add_near_heap_limit_callback(move |current_value, _| {
+                    isolate_handle.terminate_execution();
 
-                // Signal the outer runtime to cancel block_on future (avoid hanging) and return friendly error
-                heap_exhausted_token.cancel();
+                    // Signal the outer runtime to cancel block_on future (avoid hanging) and return friendly error
+                    heap_exhausted_token.cancel();
 
-                // Spike the heap limit while terminating to avoid segfaulting
-                // Callback may fire multiple times if memory usage increases quicker then termination finalizes
-                5 * current_value
-            });
+                    // Spike the heap limit while terminating to avoid segfaulting
+                    // Callback may fire multiple times if memory usage increases quicker then termination finalizes
+                    5 * current_value
+                });
         }
 
+        let default_entrypoint = options.default_entrypoint;
         Ok(Self {
-            deno_runtime,
             module_loader,
-
-            default_entrypoint: options.default_entrypoint,
+            deno_runtime,
+            cwd,
+            default_entrypoint,
         })
+    }
+
+    /// Destroy the `RustyScript` runtime, returning the deno RT instance
+    #[allow(dead_code)]
+    pub fn into_inner(self) -> RT {
+        self.deno_runtime
     }
 
     /// Access the underlying deno runtime instance directly
     pub fn deno_runtime(&mut self) -> &mut JsRuntime {
-        &mut self.deno_runtime
+        self.deno_runtime.rt_mut()
+    }
+
+    /// Set the current working directory for the runtime
+    /// This is used to resolve relative paths in the module loader
+    pub fn set_current_dir(&mut self, path: impl AsRef<Path>) -> Result<&Path, Error> {
+        let path = path.as_ref();
+        let path = utilities::resolve_path(path, Some(&self.cwd))?
+            .to_file_path()
+            .map_err(|()| Error::Runtime("Invalid path".to_string()))?;
+
+        self.cwd = path;
+        self.module_loader.set_current_dir(self.cwd.clone());
+        Ok(&self.cwd)
+    }
+
+    pub fn current_dir(&self) -> &Path {
+        &self.cwd
     }
 
     /// Remove and return a value from the state
@@ -315,11 +382,11 @@ impl InnerRuntime {
     ) -> Result<(), Error> {
         if let Some(timeout) = timeout {
             Ok(tokio::select! {
-                r = self.deno_runtime.run_event_loop(options) => r,
+                r = self.deno_runtime().run_event_loop(options) => r,
                 () = tokio::time::sleep(timeout) => Ok(()),
             }?)
         } else {
-            Ok(self.deno_runtime.run_event_loop(options).await?)
+            Ok(self.deno_runtime().run_event_loop(options).await?)
         }
     }
 
@@ -330,7 +397,7 @@ impl InnerRuntime {
         options: PollEventLoopOptions,
     ) -> Result<bool, Error> {
         let result = std::future::poll_fn(|cx| {
-            Poll::Ready(match self.deno_runtime.poll_event_loop(cx, options) {
+            Poll::Ready(match self.deno_runtime().poll_event_loop(cx, options) {
                 Poll::Ready(t) => t.map(|()| false),
                 Poll::Pending => Ok(true),
             })
@@ -356,7 +423,7 @@ impl InnerRuntime {
     {
         let result = self.deno_runtime().execute_script("", expr.to_string())?;
 
-        let mut scope = self.deno_runtime.handle_scope();
+        let mut scope = self.deno_runtime().handle_scope();
         let result = v8::Local::new(&mut scope, result);
         Ok(from_v8(&mut scope, result)?)
     }
@@ -369,8 +436,8 @@ impl InnerRuntime {
     /// # Returns
     /// A `Result` containing the non-null value extracted or an error (`Error`)
     pub fn get_global_value(&mut self, name: &str) -> Result<v8::Global<v8::Value>, Error> {
-        let context = self.deno_runtime.main_context();
-        let mut scope = self.deno_runtime.handle_scope();
+        let context = self.deno_runtime().main_context();
+        let mut scope = self.deno_runtime().handle_scope();
         let global = context.open(&mut scope).global(&mut scope);
 
         let key = name.to_v8_string(&mut scope)?;
@@ -396,9 +463,9 @@ impl InnerRuntime {
         name: &str,
     ) -> Result<v8::Global<v8::Value>, Error> {
         let module_namespace = self
-            .deno_runtime
+            .deno_runtime()
             .get_module_namespace(module_context.id())?;
-        let mut scope = self.deno_runtime.handle_scope();
+        let mut scope = self.deno_runtime().handle_scope();
         let module_namespace = module_namespace.open(&mut scope);
         assert!(module_namespace.is_module_namespace_object());
 
@@ -415,9 +482,9 @@ impl InnerRuntime {
         &mut self,
         value: v8::Global<v8::Value>,
     ) -> Result<v8::Global<v8::Value>, Error> {
-        let future = self.deno_runtime.resolve(value);
+        let future = self.deno_runtime().resolve(value);
         let result = self
-            .deno_runtime
+            .deno_runtime()
             .with_event_loop_future(future, PollEventLoopOptions::default())
             .await?;
         Ok(result)
@@ -427,7 +494,7 @@ impl InnerRuntime {
     where
         T: DeserializeOwned,
     {
-        let mut scope = self.deno_runtime.handle_scope();
+        let mut scope = self.deno_runtime().handle_scope();
         let result = v8::Local::<v8::Value>::new(&mut scope, value);
         Ok(from_v8(&mut scope, result)?)
     }
@@ -469,7 +536,7 @@ impl InnerRuntime {
         let value = self.get_value_ref(module_context, name)?;
 
         // Convert it into a function
-        let mut scope = self.deno_runtime.handle_scope();
+        let mut scope = self.deno_runtime().handle_scope();
         let local_value = v8::Local::<v8::Value>::new(&mut scope, value);
         let f: v8::Local<v8::Function> = local_value
             .try_into()
@@ -488,14 +555,14 @@ impl InnerRuntime {
         // Namespace, if provided
         let module_namespace = if let Some(module_context) = module_context {
             Some(
-                self.deno_runtime
+                self.deno_runtime()
                     .get_module_namespace(module_context.id())?,
             )
         } else {
             None
         };
 
-        let mut scope = self.deno_runtime.handle_scope();
+        let mut scope = self.deno_runtime().handle_scope();
         let mut scope = v8::TryCatch::new(&mut scope);
 
         // Get the namespace
@@ -568,7 +635,7 @@ impl InnerRuntime {
         std::future::poll_fn(|cx| {
             if let Poll::Ready(t) = fut.poll_unpin(cx) {
                 return if let Poll::Ready(Err(e)) =
-                    self.deno_runtime.poll_event_loop(cx, poll_options)
+                    self.deno_runtime().poll_event_loop(cx, poll_options)
                 {
                     // Run one more tick to check for errors
                     Poll::Ready(Err(e.into()))
@@ -578,13 +645,13 @@ impl InnerRuntime {
                 };
             }
 
-            if let Poll::Ready(Err(e)) = self.deno_runtime.poll_event_loop(cx, poll_options) {
+            if let Poll::Ready(Err(e)) = self.deno_runtime().poll_event_loop(cx, poll_options) {
                 // Event loop failed
                 return Poll::Ready(Err(e.into()));
             }
 
             if self
-                .deno_runtime
+                .deno_runtime()
                 .poll_event_loop(cx, poll_options)
                 .is_ready()
             {
@@ -605,7 +672,7 @@ impl InnerRuntime {
         let default = self.default_entrypoint.clone();
 
         // Try to get an entrypoint from a call to `rustyscript.register_entrypoint` first
-        let state = self.deno_runtime.op_state();
+        let state = self.deno_runtime().op_state();
         let mut deep_state = state.try_borrow_mut()?;
         let entrypoint = deep_state.try_take::<v8::Global<v8::Function>>();
         if let Some(entrypoint) = entrypoint {
@@ -614,7 +681,7 @@ impl InnerRuntime {
 
         // Try to get an entrypoint from the default export next
         if let Ok(default_export) = self.get_module_export_value(module_context, "default") {
-            let mut scope = self.deno_runtime.handle_scope();
+            let mut scope = self.deno_runtime().handle_scope();
             let default_export = v8::Local::new(&mut scope, default_export);
             if default_export.is_function() {
                 if let Ok(f) = v8::Local::<v8::Function>::try_from(default_export) {
@@ -654,12 +721,12 @@ impl InnerRuntime {
 
         // Get additional modules first
         for side_module in side_modules {
-            let module_specifier = side_module.filename().to_module_specifier(None)?;
+            let module_specifier = side_module.filename().to_module_specifier(&self.cwd)?;
             let (code, sourcemap) = transpile(&module_specifier, side_module.contents())?;
             let fast_code = deno_core::FastString::from(code.clone());
 
             let s_modid = self
-                .deno_runtime
+                .deno_runtime()
                 .load_side_es_module_from_code(&module_specifier, fast_code)
                 .await?;
 
@@ -670,7 +737,7 @@ impl InnerRuntime {
                 sourcemap.map(|s| s.to_vec()),
             );
 
-            let mod_load = self.deno_runtime.mod_evaluate(s_modid);
+            let mod_load = self.deno_runtime().mod_evaluate(s_modid);
             self.with_event_loop_future(mod_load, PollEventLoopOptions::default())
                 .await?;
             module_handle_stub = ModuleHandle::new(side_module, s_modid, None);
@@ -678,12 +745,12 @@ impl InnerRuntime {
 
         // Load main module
         if let Some(module) = main_module {
-            let module_specifier = module.filename().to_module_specifier(None)?;
+            let module_specifier = module.filename().to_module_specifier(&self.cwd)?;
             let (code, sourcemap) = transpile(&module_specifier, module.contents())?;
             let fast_code = deno_core::FastString::from(code.clone());
 
             let module_id = self
-                .deno_runtime
+                .deno_runtime()
                 .load_main_es_module_from_code(&module_specifier, fast_code)
                 .await?;
 
@@ -695,7 +762,7 @@ impl InnerRuntime {
             );
 
             // Finish execution
-            let mod_load = self.deno_runtime.mod_evaluate(module_id);
+            let mod_load = self.deno_runtime().mod_evaluate(module_id);
             self.with_event_loop_future(mod_load, PollEventLoopOptions::default())
                 .await?;
             module_handle_stub = ModuleHandle::new(module, module_id, None);
@@ -752,8 +819,9 @@ mod test_inner_runtime {
 
     #[test]
     fn test_decode_args() {
-        let mut runtime = InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
-            .expect("Could not load runtime");
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
         let mut scope = runtime.deno_runtime.handle_scope();
 
         // empty
@@ -798,8 +866,9 @@ mod test_inner_runtime {
 
     #[test]
     fn test_put_take() {
-        let mut runtime = InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
-            .expect("Could not load runtime");
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
 
         runtime.put(2usize).expect("Could not put value");
         let v = runtime.take::<usize>().expect("Could not take value");
@@ -808,8 +877,9 @@ mod test_inner_runtime {
 
     #[test]
     fn test_register_async_function() {
-        let mut runtime = InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
-            .expect("Could not load runtime");
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
         runtime
             .register_async_function(
                 "test",
@@ -835,8 +905,9 @@ mod test_inner_runtime {
 
     #[test]
     fn test_register_function() {
-        let mut runtime = InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
-            .expect("Could not load runtime");
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
         runtime
             .register_function(
                 "test",
@@ -853,8 +924,9 @@ mod test_inner_runtime {
     #[cfg(any(feature = "web", feature = "web_stub"))]
     #[test]
     fn test_eval() {
-        let mut runtime = InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
-            .expect("Could not load runtime");
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
 
         let result: usize = runtime.eval("2 + 2").expect("Could not eval");
         assert_eq!(result, 4);
@@ -879,8 +951,9 @@ mod test_inner_runtime {
     #[cfg(feature = "web_stub")]
     #[test]
     fn test_base64() {
-        let mut runtime = InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
-            .expect("Could not load runtime");
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
 
         let result: String = runtime.eval("btoa('foo')").expect("Could not eval");
         assert_eq!(result, "Zm9v");
@@ -900,8 +973,9 @@ mod test_inner_runtime {
         ",
         );
 
-        let mut runtime = InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
-            .expect("Could not load runtime");
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
 
         let rt = &mut runtime;
         let module = run_async_task(|| async move { rt.load_modules(Some(&module), vec![]).await });
@@ -941,8 +1015,9 @@ mod test_inner_runtime {
         ",
         );
 
-        let mut runtime = InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
-            .expect("Could not load runtime");
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
 
         let rt = &mut runtime;
         let module = run_async_task(|| async move { rt.load_modules(Some(&module), vec![]).await });
@@ -981,7 +1056,7 @@ mod test_inner_runtime {
 
         run_async_task(|| async move {
             let mut runtime =
-                InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
+                InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
                     .expect("Could not load runtime");
             let handle = runtime.load_modules(Some(&module), vec![]).await?;
 
@@ -1024,8 +1099,9 @@ mod test_inner_runtime {
         ",
         );
 
-        let mut runtime = InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
-            .expect("Could not load runtime");
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
 
         let rt = &mut runtime;
         let module = run_async_task(|| async move { rt.load_modules(Some(&module), vec![]).await });
@@ -1052,8 +1128,9 @@ mod test_inner_runtime {
         ",
         );
 
-        let mut runtime = InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
-            .expect("Could not load runtime");
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
 
         let rt = &mut runtime;
         let module = run_async_task(|| async move {
@@ -1088,8 +1165,9 @@ mod test_inner_runtime {
         ",
         );
 
-        let mut runtime = InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
-            .expect("Could not load runtime");
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
 
         let rt = &mut runtime;
         run_async_task(|| async move {
@@ -1119,8 +1197,9 @@ mod test_inner_runtime {
         ",
         );
 
-        let mut runtime = InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
-            .expect("Could not load runtime");
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
 
         let rt = &mut runtime;
         run_async_task(|| async move {
@@ -1149,8 +1228,9 @@ mod test_inner_runtime {
         ",
         );
 
-        let mut runtime = InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
-            .expect("Could not load runtime");
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
 
         let rt = &mut runtime;
         let module = run_async_task(|| async move { rt.load_modules(Some(&module), vec![]).await });
@@ -1196,8 +1276,9 @@ mod test_inner_runtime {
         ",
         );
 
-        let mut runtime = InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
-            .expect("Could not load runtime");
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
 
         let rt = &mut runtime;
         let module_ = module.clone();
@@ -1207,8 +1288,9 @@ mod test_inner_runtime {
             );
         assert!(result);
 
-        let mut runtime = InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
-            .expect("Could not load runtime");
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
 
         let rt = &mut runtime;
         let result =
@@ -1227,8 +1309,9 @@ mod test_inner_runtime {
         ",
         );
 
-        let mut runtime = InnerRuntime::new(RuntimeOptions::default(), CancellationToken::new())
-            .expect("Could not load runtime");
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
 
         let rt = &mut runtime;
         let module = run_async_task(|| async move { rt.load_modules(Some(&module), vec![]).await });

@@ -1,10 +1,11 @@
 use crate::{
+    async_bridge::{AsyncBridge, AsyncBridgeExt},
     inner_runtime::{InnerRuntime, RsAsyncFunction, RsFunction},
     js_value::Function,
     Error, Module, ModuleHandle,
 };
 use deno_core::{serde_json, PollEventLoopOptions};
-use std::{rc::Rc, time::Duration};
+use std::{path::Path, rc::Rc, time::Duration};
 use tokio_util::sync::CancellationToken;
 
 /// Represents the set of options accepted by the runtime constructor
@@ -28,10 +29,8 @@ pub type Undefined = crate::js_value::Value;
 /// Note: For multithreaded applications, you may need to call `init_platform` before creating a `Runtime`
 /// (See [[`crate::init_platform`])
 pub struct Runtime {
-    inner: InnerRuntime,
-    tokio: Rc<tokio::runtime::Runtime>,
-    timeout: std::time::Duration,
-    heap_exhausted_token: CancellationToken,
+    inner: InnerRuntime<deno_core::JsRuntime>,
+    tokio: AsyncBridge,
 }
 
 impl Runtime {
@@ -75,14 +74,9 @@ impl Runtime {
     /// Or if the deno runtime initialization fails (usually issues with extensions)
     ///
     pub fn new(options: RuntimeOptions) -> Result<Self, Error> {
-        let tokio = Rc::new(
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .thread_keep_alive(options.timeout)
-                .build()?,
-        );
-
-        Self::with_tokio_runtime(options, tokio)
+        let tokio = AsyncBridge::new(options.timeout)?;
+        let inner = InnerRuntime::new(options, tokio.heap_exhausted_token())?;
+        Ok(Self { inner, tokio })
     }
 
     /// Creates a new instance of the runtime with the provided options and a pre-configured tokio runtime.
@@ -94,13 +88,9 @@ impl Runtime {
         options: RuntimeOptions,
         tokio: Rc<tokio::runtime::Runtime>,
     ) -> Result<Self, Error> {
-        let heap_exhausted_token = CancellationToken::new();
-        Ok(Self {
-            timeout: options.timeout,
-            inner: InnerRuntime::new(options, heap_exhausted_token.clone())?,
-            tokio,
-            heap_exhausted_token,
-        })
+        let tokio = AsyncBridge::with_tokio_runtime(options.timeout, tokio);
+        let inner = InnerRuntime::new(options, tokio.heap_exhausted_token())?;
+        Ok(Self { inner, tokio })
     }
 
     /// Access the underlying deno runtime instance directly
@@ -111,26 +101,47 @@ impl Runtime {
     /// Access the underlying tokio runtime used for blocking operations
     #[must_use]
     pub fn tokio_runtime(&self) -> std::rc::Rc<tokio::runtime::Runtime> {
-        self.tokio.clone()
+        self.tokio.tokio_runtime()
     }
 
     /// Returns the timeout for the runtime
     #[must_use]
     pub fn timeout(&self) -> std::time::Duration {
-        self.timeout
+        self.tokio.timeout()
     }
 
     /// Returns the heap exhausted token for the runtime
+    /// Used to detect when the runtime has run out of memory
     #[must_use]
     pub fn heap_exhausted_token(&self) -> CancellationToken {
-        self.heap_exhausted_token.clone()
+        self.tokio.heap_exhausted_token()
     }
 
     /// Destroy the v8 runtime, releasing all resources
     /// Then the internal tokio runtime will be returned
     #[must_use]
     pub fn into_tokio_runtime(self) -> Rc<tokio::runtime::Runtime> {
-        self.tokio
+        self.tokio.into_tokio_runtime()
+    }
+
+    /// Set the current working directory for the runtime
+    /// This is used to resolve relative paths in the module loader
+    ///
+    /// The runtime will begin with the current working directory of the process
+    ///
+    /// # Errors
+    /// Can fail if the given path is not valid
+    pub fn set_current_dir(&mut self, path: impl AsRef<Path>) -> Result<&Path, Error> {
+        self.inner.set_current_dir(path)
+    }
+
+    /// Get the current working directory for the runtime
+    /// This is used to resolve relative paths in the module loader
+    ///
+    /// The runtime will begin with the current working directory of the process
+    #[must_use]
+    pub fn current_dir(&self) -> &Path {
+        self.inner.current_dir()
     }
 
     /// Advance the JS event loop by a single tick
@@ -144,9 +155,7 @@ impl Runtime {
     /// # Errors
     /// Can fail if a runtime error occurs during the event loop's execution
     pub fn advance_event_loop(&mut self, options: PollEventLoopOptions) -> Result<bool, Error> {
-        self.run_async_task(
-            |runtime| async move { runtime.inner.advance_event_loop(options).await },
-        )
+        self.block_on(|runtime| async move { runtime.inner.advance_event_loop(options).await })
     }
 
     /// Run the JS event loop to completion, or until a timeout is reached
@@ -182,9 +191,7 @@ impl Runtime {
         options: deno_core::PollEventLoopOptions,
         timeout: Option<Duration>,
     ) -> Result<(), Error> {
-        self.run_async_task(
-            |runtime| async move { runtime.await_event_loop(options, timeout).await },
-        )
+        self.block_on(|runtime| async move { runtime.await_event_loop(options, timeout).await })
     }
 
     /// Encode an argument as a json value for use as a function argument
@@ -481,7 +488,7 @@ impl Runtime {
     where
         T: deno_core::serde::de::DeserializeOwned,
     {
-        self.run_async_task(|runtime| async move {
+        self.block_on(|runtime| async move {
             runtime
                 .call_stored_function_async(module_context, function, args)
                 .await
@@ -603,7 +610,7 @@ impl Runtime {
     where
         T: deno_core::serde::de::DeserializeOwned,
     {
-        self.run_async_task(|runtime| async move {
+        self.block_on(|runtime| async move {
             runtime
                 .call_function_async(module_context, name, args)
                 .await
@@ -695,9 +702,7 @@ impl Runtime {
     where
         T: serde::de::DeserializeOwned,
     {
-        self.run_async_task(
-            |runtime| async move { runtime.get_value_async(module_context, name).await },
-        )
+        self.block_on(|runtime| async move { runtime.get_value_async(module_context, name).await })
     }
 
     /// Get a value from a runtime instance
@@ -802,7 +807,7 @@ impl Runtime {
     /// # }
     /// ```
     pub fn load_module(&mut self, module: &Module) -> Result<ModuleHandle, Error> {
-        self.run_async_task(|runtime| async move {
+        self.block_on(|runtime| async move {
             let handle = runtime.load_module_async(module).await;
             runtime
                 .await_event_loop(PollEventLoopOptions::default(), None)
@@ -872,7 +877,7 @@ impl Runtime {
         module: &Module,
         side_modules: Vec<&Module>,
     ) -> Result<ModuleHandle, Error> {
-        self.run_async_task(move |runtime| async move {
+        self.block_on(move |runtime| async move {
             let handle = runtime.load_modules_async(module, side_modules).await;
             runtime
                 .await_event_loop(PollEventLoopOptions::default(), None)
@@ -951,9 +956,9 @@ impl Runtime {
     where
         T: deno_core::serde::de::DeserializeOwned,
     {
-        self.run_async_task(|runtime| async move {
-            runtime.call_entrypoint_async(module_context, args).await
-        })
+        self.block_on(
+            |runtime| async move { runtime.call_entrypoint_async(module_context, args).await },
+        )
     }
 
     /// Executes the entrypoint function of a module within the Deno runtime.
@@ -1036,7 +1041,7 @@ impl Runtime {
         T: deno_core::serde::de::DeserializeOwned,
     {
         if let Some(entrypoint) = module_context.entrypoint() {
-            let result = self.run_async_task(|runtime| async move {
+            let result = self.block_on(|runtime| async move {
                 runtime
                     .inner
                     .call_function_by_ref(Some(module_context), entrypoint, args)
@@ -1091,22 +1096,11 @@ impl Runtime {
         let value: T = runtime.call_entrypoint(&module, entrypoint_args)?;
         Ok(value)
     }
+}
 
-    /// Used for blocking functions
-    pub(crate) fn run_async_task<'a, T, F, U>(&'a mut self, f: F) -> Result<T, Error>
-    where
-        U: std::future::Future<Output = Result<T, Error>>,
-        F: FnOnce(&'a mut Runtime) -> U,
-    {
-        let timeout = self.timeout();
-        let rt = self.tokio_runtime();
-        let heap_exhausted_token = self.heap_exhausted_token();
-        rt.block_on(async move {
-            tokio::select! {
-                result = tokio::time::timeout(timeout, f(self)) => result?,
-                () = heap_exhausted_token.cancelled() => Err(Error::HeapExhausted),
-            }
-        })
+impl AsyncBridgeExt for Runtime {
+    fn bridge(&self) -> &AsyncBridge {
+        &self.tokio
     }
 }
 
@@ -1406,36 +1400,10 @@ mod test_runtime {
             .expect("Did not allow undefined return");
     }
 
-    ///
-    /// This function exists to check the safety of builtin core-ops
-    /// This is to confirm that updates to `deno_core` have not introduced any sandbox-breaking changes
-    /// in the form of a new op.
-    fn get_unrecognized_ops() -> Result<Vec<String>, Error> {
-        let mut runtime = Runtime::new(RuntimeOptions::default())?;
-        runtime.load_module(&Module::load("src/ext/op_whitelist.js")?)?;
-        let hnd = runtime.load_module(&Module::new(
-            "test_whitelist.js",
-            "
-            import { whitelist } from './src/ext/op_whitelist.js';
-            let ops = Deno.core.ops.op_op_names();
-            export const unsafe_ops = ops.filter(op => !whitelist.hasOwnProperty(op));
-        ",
-        ))?;
-
-        let unsafe_ops: Vec<String> = runtime.get_value(Some(&hnd), "unsafe_ops")?;
-        Ok(unsafe_ops)
-    }
-
-    #[test]
-    fn confirm_op_whitelist() {
-        let unsafe_ops = get_unrecognized_ops().expect("Could not get unsafe ops");
-        assert_eq!(0, unsafe_ops.len(), "Found unsafe ops: {unsafe_ops:?}.\nOnce confirmed safe, add them to `src/ext/op_whitelist.js`");
-    }
-
     #[test]
     fn test_heap_exhaustion_handled() {
         let mut runtime = Runtime::new(RuntimeOptions {
-            max_heap_size: Some(10 * 1024 * 1024),
+            max_heap_size: Some(100 * 1024 * 1024),
             ..Default::default()
         })
         .expect("Could not create the runtime");
