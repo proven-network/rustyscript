@@ -253,6 +253,21 @@ where
         self.rx.recv().map_err(|e| Error::Runtime(e.to_string()))
     }
 
+    /// Try to receive a response from the worker without blocking
+    /// This will return `Ok(None)` if no response is available
+    ///
+    /// # Errors
+    /// Will return an error if the worker has already been stopped, or if the worker thread panicked
+    pub fn try_receive(&self) -> Result<Option<W::Response>, Error> {
+        match self.rx.try_recv() {
+            Ok(v) => Ok(Some(v)),
+            Err(e) => match e {
+                std::sync::mpsc::TryRecvError::Empty => Ok(None),
+                std::sync::mpsc::TryRecvError::Disconnected => Err(Error::Runtime(e.to_string())),
+            },
+        }
+    }
+
     /// Send a request to the worker and wait for a response
     /// This will block the current thread until a response is received
     /// Will return an error if the worker has stopped or panicked
@@ -453,6 +468,12 @@ impl DefaultWorker {
         Worker::new(options).map(Self)
     }
 
+    /// Get a reference to the underlying worker instance
+    #[must_use]
+    pub fn as_worker(&self) -> &Worker<DefaultWorker> {
+        &self.0
+    }
+
     /// Evaluate a string of javascript code
     /// Returns the result of the evaluation
     ///
@@ -593,6 +614,11 @@ impl DefaultWorker {
         }
     }
 }
+impl AsRef<Worker<DefaultWorker>> for DefaultWorker {
+    fn as_ref(&self) -> &Worker<DefaultWorker> {
+        &self.0
+    }
+}
 
 /// Options for the default worker
 #[derive(Default, Clone)]
@@ -615,6 +641,7 @@ pub struct DefaultWorkerOptions {
 }
 
 /// Query types for the default worker
+#[derive(Debug, Clone)]
 pub enum DefaultWorkerQuery {
     /// Evaluates a string of javascript code
     Eval(String),
@@ -640,6 +667,7 @@ pub enum DefaultWorkerQuery {
 }
 
 /// Response types for the default worker
+#[derive(Debug, Clone)]
 pub enum DefaultWorkerResponse {
     /// A successful response with a value
     Value(crate::serde_json::Value),

@@ -105,7 +105,7 @@ pub struct ExtensionOptions {
 
     /// Optional cache configuration for the `deno_cache` extension
     #[cfg(feature = "cache")]
-    pub cache: Option<deno_cache::CreateCache<deno_cache::SqliteBackedCache>>,
+    pub cache: Option<deno_cache::CreateCache<cache::CacheBackend>>,
 
     /// Filesystem implementation for the `deno_fs` extension
     #[cfg(feature = "fs")]
@@ -114,10 +114,11 @@ pub struct ExtensionOptions {
     /// Shared in-memory broadcast channel for the `deno_broadcast_channel` extension
     /// Also used by `WebWorker` to communicate with the main thread, if node is enabled
     #[cfg(feature = "broadcast_channel")]
-    broadcast_channel: deno_broadcast_channel::InMemoryBroadcastChannel,
+    pub broadcast_channel: deno_broadcast_channel::InMemoryBroadcastChannel,
 
+    /// Key-value store for the `deno_kv` extension
     #[cfg(feature = "kv")]
-    kv_store: kv::KvStore,
+    pub kv_store: kv::KvStore,
 
     /// Package resolver for the `deno_node` extension
     /// `RustyResolver` allows you to select the base dir for modules
@@ -142,7 +143,9 @@ impl Default for ExtensionOptions {
             webstorage_origin_storage_dir: None,
 
             #[cfg(feature = "cache")]
-            cache: None,
+            cache: Some(deno_cache::CreateCache(std::sync::Arc::new(|| {
+                Ok(cache::CacheBackend::new_memory())
+            }))),
 
             #[cfg(feature = "fs")]
             filesystem: std::sync::Arc::new(deno_fs::RealFs),
