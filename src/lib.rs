@@ -1,16 +1,28 @@
-//! This crate is meant to provide a quick and simple way to integrate a runtime javascript or typescript component from within rust.
+//! rustyscript provides a quick and simple way to integrate a runtime javascript or typescript component from within Rust.
+//! It uses the v8 engine through the `deno_core`.
 //!
-//! It uses the v8 engine through the `deno_core` crate, and is meant to be as simple as possible to use without sacrificing flexibility or performance.
+//! I have attempted to abstract away the v8 engine details so you can for the most part operate directly on rust types.
 //!
-//! I also have attempted to abstract away the v8 engine details so you can for the most part operate directly on rust types.
+//! ### Sandboxed
+//! By default, the code being run is entirely sandboxed from the host, having no filesystem or network access.
+//! [extensions](https://rscarson.github.io/rustyscript-book/extensions) can be added to grant additional capabilities that may violate sandboxing
 //!
-//! - **By default, the code being run is entirely sandboxed from the host, having no filesystem or network access.**
-//!     - It can be extended to include those capabilities and more if desired - please see the `web` feature, and the `runtime_extensions` example
-//! - Asynchronous JS code is supported (I suggest using the timeout option when creating your runtime)
-//! - Loaded JS modules can import other modules
-//! - Typescript is supported by default, and will be transpiled into JS for execution
+//! ### Flexible
+//! The runtime is designed to be as flexible as possible, allowing you to modify capabilities, the module loader, and more.  
+//! - Asynchronous JS is fully supported, and the runtime can be configured to run in a multithreaded environment.  
+//! - Typescript is supported, and will be transpired into JS for execution.
+//! - Node JS is supported experimentally, but is not yet fully compatible.
 //!
-//! ----
+//! ### Unopinionated
+//! Rustyscript is designed to be a thin wrapper over the Deno runtime, to remove potential pitfalls and simplify the API
+//! without sacrificing flexibility or performance.
+//!
+//! -----
+//!
+//! A draft version of the rustyscript user guide can be found here:
+//! <https://rscarson.github.io/rustyscript-book/>
+//!
+//! -----
 //!
 //! Here is a very basic use of this crate to execute a JS module. It will:
 //! - Create a basic runtime
@@ -266,8 +278,6 @@
 //!
 //! For an example of this crate in use, see [Lavendeux](https://github.com/rscarson/lavendeux)
 //!
-//! Please also check out [@Bromeon/js_sandbox](https://github.com/Bromeon/js-sandbox), another great crate in this niche
-//!
 #![warn(missing_docs)]
 #![warn(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)] //    Does not account for crate-level re-exports
@@ -285,6 +295,7 @@ pub use runtime_builder::RuntimeBuilder;
 pub mod error;
 pub mod js_value;
 pub mod module_loader;
+pub mod static_runtime;
 
 mod async_bridge;
 mod ext;
@@ -364,6 +375,12 @@ pub use module_handle::ModuleHandle;
 pub use module_wrapper::ModuleWrapper;
 pub use runtime::{Runtime, RuntimeOptions, Undefined};
 pub use utilities::{evaluate, import, init_platform, resolve_path, validate};
+
+#[cfg(feature = "broadcast_channel")]
+pub use ext::broadcast_channel::BroadcastChannelWrapper;
+
+#[cfg(feature = "web")]
+pub use hyper_util;
 
 #[cfg(test)]
 mod test {

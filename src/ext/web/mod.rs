@@ -29,12 +29,12 @@ impl ExtensionTrait<WebOptions> for deno_fetch::deno_fetch {
             user_agent: options.user_agent.clone(),
             root_cert_store_provider: options.root_cert_store_provider.clone(),
             proxy: options.proxy.clone(),
-            client_builder_hook: None,
             request_builder_hook: options.request_builder_hook,
             unsafely_ignore_certificate_errors: options.unsafely_ignore_certificate_errors.clone(),
             client_cert_chain_and_key: options.client_cert_chain_and_key.clone(),
             file_fetch_handler: options.file_fetch_handler.clone(),
-            resolver: deno_fetch::dns::Resolver::default(),
+            client_builder_hook: options.client_builder_hook,
+            resolver: options.resolver.clone(),
         };
 
         deno_fetch::deno_fetch::init_ops_and_esm::<PermissionsContainer>(options)
