@@ -21,7 +21,6 @@ import {
 	quoteString,
 } from "ext:deno_console/01_console.js";
 
-
 class NotFound extends Error {
 	constructor(msg) {
 		super(msg);
