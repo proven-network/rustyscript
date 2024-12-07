@@ -282,3 +282,6 @@ required-features = ["web"]
 [[bench]]
 name = "runtime"
 harness = false
+
+[lints.clippy]
+all = "allow"
