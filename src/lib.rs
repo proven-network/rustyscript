@@ -1,26 +1,31 @@
+//! ![Rustyscript - Effortless JS Integration for Rust](https://raw.githubusercontent.com/rscarson/rustyscript/refs/heads/master/.github/rustyscript-logo-wide.png)
+//!
+//! [![Crates.io](https://img.shields.io/crates/v/rustyscript.svg)](https://crates.io/crates/rustyscript/)
+//! [![Build Status](https://github.com/rscarson/rustyscript/actions/workflows/tests.yml/badge.svg?branch=master)](https://github.com/rscarson/rustyscript/actions?query=branch%3Amaster)
+//! [![docs.rs](https://img.shields.io/docsrs/rustyscript)](https://docs.rs/rustyscript/latest/rustyscript/)
+//! [![Static Badge](https://img.shields.io/badge/mdbook-user%20guide-blue)](https://rscarson.github.io/rustyscript-book/)
+//! [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/rscarson/rustyscript/master/LICENSE)
+//!
+//! ## Rustyscript - Effortless JS Integration for Rust
+//!
 //! rustyscript provides a quick and simple way to integrate a runtime javascript or typescript component from within Rust.
-//! It uses the v8 engine through the `deno_core`.
 //!
-//! I have attempted to abstract away the v8 engine details so you can for the most part operate directly on rust types.
+//! It uses the v8 engine through the `deno_core` crate, and aims to be as simple as possible to use without sacrificing flexibility or performance.  
+//! I also have attempted to abstract away the v8 engine details so you can for the most part operate directly on rust types.
 //!
-//! ### Sandboxed
-//! By default, the code being run is entirely sandboxed from the host, having no filesystem or network access.
+//!
+//! **Sandboxed**  
+//! By default, the code being run is entirely sandboxed from the host, having no filesystem or network access.  
 //! [extensions](https://rscarson.github.io/rustyscript-book/extensions) can be added to grant additional capabilities that may violate sandboxing
 //!
-//! ### Flexible
+//! **Flexible**  
 //! The runtime is designed to be as flexible as possible, allowing you to modify capabilities, the module loader, and more.  
 //! - Asynchronous JS is fully supported, and the runtime can be configured to run in a multithreaded environment.  
 //! - Typescript is supported, and will be transpired into JS for execution.
-//! - Node JS is supported experimentally, but is not yet fully compatible.
+//! - Node JS is supported experimentally, but is not yet fully compatible ([See the `NodeJS` Compatibility section](https://rscarson.github.io/rustyscript-book/advanced/nodejs_compatibility.md))
 //!
-//! ### Unopinionated
-//! Rustyscript is designed to be a thin wrapper over the Deno runtime, to remove potential pitfalls and simplify the API
-//! without sacrificing flexibility or performance.
-//!
-//! -----
-//!
-//! A draft version of the rustyscript user guide can be found here:
-//! <https://rscarson.github.io/rustyscript-book/>
+//! **Unopinionated**  
+//! Rustyscript is designed to be a thin wrapper over the Deno runtime, to remove potential pitfalls and simplify the API without sacrificing flexibility or performance.
 //!
 //! -----
 //!
@@ -280,13 +285,16 @@
 //!
 #![warn(missing_docs)]
 #![warn(clippy::pedantic)]
-#![allow(clippy::module_name_repetitions)] //    Does not account for crate-level re-exports
-#![allow(clippy::inline_always)] //              Does not account for deno_core's use of inline(always) on op2
-#![allow(clippy::needless_pass_by_value)] //     Disabling some features can trigger this
+#![allow(clippy::module_name_repetitions)] //   Does not account for crate-level re-exports
+#![allow(clippy::inline_always)] //             Does not account for deno_core's use of inline(always) on op2
+#![allow(clippy::needless_pass_by_value)] //    Disabling some features can trigger this
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(feature = "snapshot_builder")]
 mod snapshot_builder;
+
 #[cfg(feature = "snapshot_builder")]
+#[cfg_attr(docsrs, doc(cfg(feature = "snapshot_builder")))]
 pub use snapshot_builder::SnapshotBuilder;
 
 mod runtime_builder;
@@ -309,6 +317,7 @@ mod transpiler;
 mod utilities;
 
 #[cfg(feature = "worker")]
+#[cfg_attr(docsrs, doc(cfg(feature = "worker")))]
 pub mod worker;
 
 // Expose a few dependencies that could be useful
@@ -319,48 +328,80 @@ pub use tokio;
 /// Re-exports of the deno extension crates used by this library
 pub mod extensions {
     #[cfg(feature = "broadcast_channel")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "broadcast_channel")))]
     pub use deno_broadcast_channel;
+
     #[cfg(feature = "cache")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "cache")))]
     pub use deno_cache;
+
     #[cfg(feature = "console")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "console")))]
     pub use deno_console;
+
     #[cfg(feature = "cron")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "cron")))]
     pub use deno_cron;
+
     #[cfg(feature = "crypto")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "crypto")))]
     pub use deno_crypto;
+
     #[cfg(feature = "ffi")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "ffi")))]
     pub use deno_ffi;
+
     #[cfg(feature = "fs")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "fs")))]
     pub use deno_fs;
+
     #[cfg(feature = "http")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "http")))]
     pub use deno_http;
+
     #[cfg(feature = "io")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "io")))]
     pub use deno_io;
+
     #[cfg(feature = "kv")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "kv")))]
     pub use deno_kv;
+
     #[cfg(feature = "url")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "url")))]
     pub use deno_url;
+
     #[cfg(feature = "webgpu")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "webgpu")))]
     pub use deno_webgpu;
+
     #[cfg(feature = "websocket")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "websocket")))]
     pub use deno_websocket;
+
     #[cfg(feature = "webstorage")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "webstorage")))]
     pub use deno_webstorage;
+
+    #[cfg(feature = "web")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "webstorage")))]
+    pub use deno_tls;
 }
 
-#[cfg(feature = "web")]
-pub use deno_tls;
-
 #[cfg(feature = "kv")]
+#[cfg_attr(docsrs, doc(cfg(feature = "kv")))]
 pub use ext::kv::{KvConfig, KvStore};
 
 #[cfg(feature = "cache")]
+#[cfg_attr(docsrs, doc(cfg(feature = "cache")))]
 pub use ext::cache::CacheBackend;
 
 #[cfg(feature = "node_experimental")]
+#[cfg_attr(docsrs, doc(cfg(feature = "node_experimental")))]
 pub use ext::node::RustyResolver;
 
 #[cfg(feature = "web")]
+#[cfg_attr(docsrs, doc(cfg(feature = "web")))]
 pub use ext::web::{
     AllowlistWebPermissions, DefaultWebPermissions, PermissionDenied, SystemsPermissionKind,
     WebOptions, WebPermissions,
@@ -370,20 +411,26 @@ pub use ext::ExtensionOptions;
 // Expose some important stuff from us
 pub use error::Error;
 pub use inner_runtime::{RsAsyncFunction, RsFunction};
-pub use module::{Module, StaticModule};
+pub use module::Module;
 pub use module_handle::ModuleHandle;
 pub use module_wrapper::ModuleWrapper;
 pub use runtime::{Runtime, RuntimeOptions, Undefined};
 pub use utilities::{evaluate, import, init_platform, resolve_path, validate};
 
 #[cfg(feature = "broadcast_channel")]
+#[cfg_attr(docsrs, doc(cfg(feature = "broadcast_channel")))]
 pub use ext::broadcast_channel::BroadcastChannelWrapper;
 
 #[cfg(feature = "web")]
+#[cfg_attr(docsrs, doc(cfg(feature = "web")))]
 pub use hyper_util;
 
 #[cfg(test)]
 mod test {
+    use crate::{include_module, Error, Module, Runtime, RuntimeOptions};
+
+    static WHITELIST: Module = include_module!("op_whitelist.js");
+
     #[test]
     fn test_readme_deps() {
         version_sync::assert_markdown_deps_updated!("readme.md");
@@ -392,5 +439,33 @@ mod test {
     #[test]
     fn test_html_root_url() {
         version_sync::assert_html_root_url_updated!("src/lib.rs");
+    }
+
+    #[test]
+    #[cfg(not(feature = "web"))]
+    fn check_op_whitelist() {
+        let inner = || -> Result<(), Error> {
+            let mut runtime = Runtime::new(RuntimeOptions::default())?;
+            runtime.load_module(&WHITELIST)?;
+            let hnd = runtime.load_module(&Module::new(
+                "test_whitelist.js",
+                "
+                import { whitelist } from './op_whitelist.js';
+                let ops = Deno.core.ops.op_op_names();
+                export const unsafe_ops = ops.filter(op => !whitelist.hasOwnProperty(op));
+            ",
+            ))?;
+
+            let unsafe_ops: Vec<String> = runtime.get_value(Some(&hnd), "unsafe_ops")?;
+
+            if !unsafe_ops.is_empty() {
+                println!("Found unsafe ops: {unsafe_ops:?}.\nOnce confirmed safe, add them to `src/op_whitelist.js`");
+                std::process::exit(1);
+            }
+
+            Ok(())
+        };
+
+        inner().expect("Could not verify op safety");
     }
 }

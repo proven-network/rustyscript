@@ -3,34 +3,30 @@
 //!
 //! Can be used with default `RuntimeOptions` like so:
 //! ```rust
-//! use rustyscript::{RuntimeOptions, Error, static_runtime};
+//! use rustyscript::{static_runtime, Error, RuntimeOptions};
 //! use std::time::Duration;
 //!
 //! static_runtime!(MY_DEFAULT_RUNTIME);
 //!
 //! fn main() -> Result<(), Error> {
-//!     MY_DEFAULT_RUNTIME::with(|runtime| {
-//!         runtime.eval::<()>("console.log('Hello, world!')")
-//!     })
+//!     MY_DEFAULT_RUNTIME::with(|runtime| runtime.eval::<()>("console.log('Hello, world!')"))
 //! }
 //! ```
 //!
 //! Or with custom `RuntimeOptions`:
 //! ```rust
-//! use rustyscript::{Error, RuntimeOptions, static_runtime};
+//! use rustyscript::{static_runtime, Error, RuntimeOptions};
 //! use std::time::Duration;
 //!
 //! static_runtime!(MY_CUSTOM_RUNTIME, {
-//!    RuntimeOptions {
-//!        timeout: Duration::from_secs(5),
-//!        ..Default::default()
-//!    }
+//!     RuntimeOptions {
+//!         timeout: Duration::from_secs(5),
+//!         ..Default::default()
+//!     }
 //! });
 //!
 //! fn main() -> Result<(), Error> {
-//!     MY_CUSTOM_RUNTIME::with(|runtime| {
-//!         runtime.eval::<()>("console.log('Hello, world!')")
-//!     })
+//!     MY_CUSTOM_RUNTIME::with(|runtime| runtime.eval::<()>("console.log('Hello, world!')"))
 //! }
 //! ```
 use crate::{Error, Runtime, RuntimeOptions};
@@ -42,7 +38,7 @@ use std::cell::{OnceCell, RefCell, RefMut};
 pub struct StaticRuntimeLock<'a> {
     lock: RefMut<'a, Result<Runtime, Error>>,
 }
-impl<'a> StaticRuntimeLock<'a> {
+impl StaticRuntimeLock<'_> {
     /// Get a mutable reference to the runtime instance the lock is holding
     pub fn runtime(&mut self) -> &mut Runtime {
         match self.lock.as_mut() {
@@ -63,33 +59,29 @@ impl<'a> StaticRuntimeLock<'a> {
 /// # Example
 /// Can be used with default `RuntimeOptions` like so:
 /// ```rust
-/// use rustyscript::{Error, static_runtime};
+/// use rustyscript::{static_runtime, Error};
 ///
 /// static_runtime!(MY_DEFAULT_RUNTIME);
 ///
 /// fn main() -> Result<(), Error> {
-///     MY_DEFAULT_RUNTIME::with(|runtime| {
-///         runtime.eval::<()>("console.log('Hello, world!')")
-///     })
+///     MY_DEFAULT_RUNTIME::with(|runtime| runtime.eval::<()>("console.log('Hello, world!')"))
 /// }
 /// ```
 ///
 /// Or with custom `RuntimeOptions`:
 /// ```rust
-/// use rustyscript::{Error, RuntimeOptions, static_runtime};
+/// use rustyscript::{static_runtime, Error, RuntimeOptions};
 /// use std::time::Duration;
 ///
 /// static_runtime!(MY_CUSTOM_RUNTIME, {
-///    RuntimeOptions {
-///        timeout: Duration::from_secs(5),
-///        ..Default::default()
-///    }
+///     RuntimeOptions {
+///         timeout: Duration::from_secs(5),
+///         ..Default::default()
+///     }
 /// });
 ///
 /// fn main() -> Result<(), Error> {
-///     MY_CUSTOM_RUNTIME::with(|runtime| {
-///         runtime.eval::<()>("console.log('Hello, world!')")
-///     })
+///     MY_CUSTOM_RUNTIME::with(|runtime| runtime.eval::<()>("console.log('Hello, world!')"))
 /// }
 /// ```
 pub struct StaticRuntime {
@@ -99,7 +91,7 @@ pub struct StaticRuntime {
 impl StaticRuntime {
     /// Create a new static runtime instance
     ///
-    /// WARNING: This method should not be used directly, use the `static_runtime!` macro instead  
+    /// WARNING: This method should not be used directly, use the `static_runtime!` macro instead
     /// Using this function will not encase the runtime in a `thread_local`, making it potentially unsafe
     pub const fn new(init_options: fn() -> RuntimeOptions) -> Self {
         Self {
@@ -162,34 +154,30 @@ impl StaticRuntime {
 ///
 /// Can be used with default `RuntimeOptions` like so:
 /// ```rust
-/// use rustyscript::{RuntimeOptions, Error, static_runtime};
+/// use rustyscript::{static_runtime, Error, RuntimeOptions};
 /// use std::time::Duration;
 ///
 /// static_runtime!(MY_DEFAULT_RUNTIME);
 ///
 /// fn main() -> Result<(), Error> {
-///     MY_DEFAULT_RUNTIME::with(|runtime| {
-///         runtime.eval::<()>("console.log('Hello, world!')")
-///     })
+///     MY_DEFAULT_RUNTIME::with(|runtime| runtime.eval::<()>("console.log('Hello, world!')"))
 /// }
 /// ```
 ///
 /// Or with custom `RuntimeOptions`:
 /// ```rust
-/// use rustyscript::{Error, RuntimeOptions, static_runtime};
+/// use rustyscript::{static_runtime, Error, RuntimeOptions};
 /// use std::time::Duration;
 ///
 /// static_runtime!(MY_CUSTOM_RUNTIME, {
-///    RuntimeOptions {
-///        timeout: Duration::from_secs(5),
-///        ..Default::default()
-///    }
+///     RuntimeOptions {
+///         timeout: Duration::from_secs(5),
+///         ..Default::default()
+///     }
 /// });
 ///
 /// fn main() -> Result<(), Error> {
-///     MY_CUSTOM_RUNTIME::with(|runtime| {
-///         runtime.eval::<()>("console.log('Hello, world!')")
-///     })
+///     MY_CUSTOM_RUNTIME::with(|runtime| runtime.eval::<()>("console.log('Hello, world!')"))
 /// }
 /// ```
 #[macro_export]

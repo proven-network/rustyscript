@@ -136,23 +136,27 @@ pub struct RuntimeOptions {
     pub import_provider: Option<Box<dyn crate::module_loader::ImportProvider>>,
 
     /// Optional snapshot to load into the runtime
-    /// This will reduce load times, but requires the same extensions to be loaded
-    /// as when the snapshot was created
+    ///
+    /// This will reduce load times, but requires the same extensions to be loaded as when the snapshot was created  
     /// If provided, user-supplied extensions must be instantiated with `init_ops` instead of `init_ops_and_esm`
     ///
     /// WARNING: Snapshots MUST be used on the same system they were created on
     pub startup_snapshot: Option<&'static [u8]>,
 
     /// Optional configuration parameters for building the underlying v8 isolate
+    ///
     /// This can be used to alter the behavior of the runtime.
+    ///
     /// See the `rusty_v8` documentation for more information
     pub isolate_params: Option<v8::CreateParams>,
 
-    /// Optional shared array buffer store to use for the runtime
+    /// Optional shared array buffer store to use for the runtime.
+    ///
     /// Allows data-sharing between runtimes across threads
     pub shared_array_buffer_store: Option<deno_core::SharedArrayBufferStore>,
 
     /// A whitelist of custom schema prefixes that are allowed to be loaded from javascript
+    ///
     /// By default only `http`/`https` (`url_import` crate feature), and `file` (`fs_import` crate feature) are allowed
     pub schema_whlist: HashSet<String>,
 }
@@ -206,6 +210,13 @@ impl<RT: RuntimeTrait> InnerRuntime<RT> {
 
             ..Default::default()
         }));
+
+        // Init otel
+        #[cfg(feature = "web")]
+        {
+            let otel_conf = options.extension_options.web.telemetry_config.clone();
+            deno_telemetry::init(otel_conf)?;
+        }
 
         // If a snapshot is provided, do not reload ESM for extensions
         let is_snapshot = options.startup_snapshot.is_some();
@@ -416,6 +427,8 @@ impl<RT: RuntimeTrait> InnerRuntime<RT> {
     /// Evaluate a piece of non-ECMAScript-module JavaScript code
     /// The expression is evaluated in the global context, so changes persist
     ///
+    /// Async because some expressions may require a tokio runtime
+    ///
     /// # Arguments
     /// * `expr` - A string representing the JavaScript expression to evaluate
     ///
@@ -423,15 +436,10 @@ impl<RT: RuntimeTrait> InnerRuntime<RT> {
     /// A `Result` containing the deserialized result of the expression (`T`)
     /// or an error (`Error`) if the expression cannot be evaluated or if the
     /// result cannot be deserialized.
-    pub fn eval<T>(&mut self, expr: &str) -> Result<T, Error>
-    where
-        T: DeserializeOwned,
-    {
+    #[allow(clippy::unused_async, reason = "Prevent panic on sleep calls")]
+    pub async fn eval(&mut self, expr: impl ToString) -> Result<v8::Global<v8::Value>, Error> {
         let result = self.deno_runtime().execute_script("", expr.to_string())?;
-
-        let mut scope = self.deno_runtime().handle_scope();
-        let result = v8::Local::new(&mut scope, result);
-        Ok(from_v8(&mut scope, result)?)
+        Ok(result)
     }
 
     /// Attempt to get a value out of the global context (globalThis.name)
@@ -937,10 +945,14 @@ mod test_inner_runtime {
             )
             .expect("Could not register function");
 
-        let result: i64 = runtime
-            .eval("rustyscript.functions.test(2, 3)")
-            .expect("Could not eval");
-        assert_eq!(result, 5);
+        run_async_task(|| async move {
+            let v = runtime
+                .eval("rustyscript.functions.test(2, 3)")
+                .await
+                .expect("failed to eval");
+            assert_v8!(v, 5, usize, runtime);
+            Ok(())
+        });
     }
 
     #[cfg(any(feature = "web", feature = "web_stub"))]
@@ -950,22 +962,25 @@ mod test_inner_runtime {
             InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
                 .expect("Could not load runtime");
 
-        let result: usize = runtime.eval("2 + 2").expect("Could not eval");
-        assert_eq!(result, 4);
-
         run_async_task(|| async move {
-            let result: Promise<usize> = runtime
+            let v = runtime.eval("2 + 2").await.expect("failed to eval");
+            assert_v8!(v, 4, usize, runtime);
+            let result = runtime
                 .eval(
                     "
                 let sleep = (ms) => new Promise((r) => setTimeout(r, ms));
                 sleep(500).then(() => 2);
             ",
                 )
-                .expect("Could not eval");
+                .await
+                .expect("failed to eval");
 
-            let result: usize = result.resolve(runtime.deno_runtime()).await?;
+            let result: Promise<u32> = runtime
+                .decode_value(result)
+                .expect("Could not decode promise");
+
+            let result: u32 = result.resolve(runtime.deno_runtime()).await?;
             assert_eq!(result, 2);
-
             Ok(())
         });
     }
@@ -977,11 +992,18 @@ mod test_inner_runtime {
             InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
                 .expect("Could not load runtime");
 
-        let result: String = runtime.eval("btoa('foo')").expect("Could not eval");
-        assert_eq!(result, "Zm9v");
+        run_async_task(|| async move {
+            let result = runtime.eval("btoa('foo')").await.expect("failed to eval");
+            assert_v8!(result, "Zm9v", String, runtime);
 
-        let result: String = runtime.eval("atob(btoa('foo'))").expect("Could not eval");
-        assert_eq!(result, "foo");
+            let result = runtime
+                .eval("atob(btoa('foo'))")
+                .await
+                .expect("failed to eval");
+            assert_v8!(result, "foo", String, runtime);
+
+            Ok(())
+        });
     }
 
     #[test]

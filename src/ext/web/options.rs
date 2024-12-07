@@ -4,8 +4,6 @@ use deno_fetch::dns::Resolver;
 use hyper_util::client::legacy::Builder;
 use std::sync::Arc;
 
-type RequestBuilderHook = fn(&mut http::Request<deno_fetch::ReqBody>) -> Result<(), AnyError>;
-
 /// Options for configuring the web related extensions
 #[derive(Clone)]
 pub struct WebOptions {
@@ -22,10 +20,12 @@ pub struct WebOptions {
     pub proxy: Option<deno_tls::Proxy>,
 
     /// Request builder hook for fetch
-    pub request_builder_hook: Option<RequestBuilderHook>,
+    #[allow(clippy::type_complexity)]
+    pub request_builder_hook:
+        Option<fn(&mut http::Request<deno_fetch::ReqBody>) -> Result<(), AnyError>>,
 
-    /// List of domain names or IP addresses for which
-    /// fetches and network OPs will ignore SSL errors
+    /// List of domain names or IP addresses for which fetches and network OPs will ignore SSL errors
+    ///
     /// This is useful for testing with self-signed certificates
     pub unsafely_ignore_certificate_errors: Option<Vec<String>>,
 
@@ -42,11 +42,15 @@ pub struct WebOptions {
     pub blob_store: Arc<deno_web::BlobStore>,
 
     ///A callback to customize HTTP client configuration.
+    ///
     /// For more info on what can be configured, see [`hyper_util::client::legacy::Builder`]
     pub client_builder_hook: Option<fn(Builder) -> Builder>,
 
     /// Resolver for DNS resolution
     pub resolver: Resolver,
+
+    /// OpenTelemetry configuration for the `deno_telemetry` extension
+    pub telemetry_config: deno_telemetry::OtelConfig,
 }
 
 impl Default for WebOptions {
@@ -64,6 +68,7 @@ impl Default for WebOptions {
             blob_store: Arc::new(deno_web::BlobStore::default()),
             client_builder_hook: None,
             resolver: Resolver::default(),
+            telemetry_config: deno_telemetry::OtelConfig::default(),
         }
     }
 }
