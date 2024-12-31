@@ -288,6 +288,8 @@
 #![allow(clippy::module_name_repetitions)] //   Does not account for crate-level re-exports
 #![allow(clippy::inline_always)] //             Does not account for deno_core's use of inline(always) on op2
 #![allow(clippy::needless_pass_by_value)] //    Disabling some features can trigger this
+#![allow(unused_imports)]
+#![allow(dead_code)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(feature = "snapshot_builder")]
