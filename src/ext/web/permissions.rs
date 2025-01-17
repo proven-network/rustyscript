@@ -37,7 +37,7 @@ impl PermissionDenied {
 // Nonsense error for now
 impl From<PermissionDenied> for PermissionCheckError {
     fn from(e: PermissionDenied) -> Self {
-        PermissionCheckError::PermissionDenied(PermissionDeniedError::Retryable {
+        PermissionCheckError::PermissionDenied(PermissionDeniedError {
             access: e.access,
             name: e.name,
         })
@@ -215,7 +215,7 @@ impl AllowlistWebPermissions {
 
     /// Whitelist a path for opening
     ///
-    /// If `read` is true, the path will be allowed to be opened for reading
+    /// If `read` is true, the path will be allowed to be opened for reading  
     /// If `write` is true, the path will be allowed to be opened for writing
     pub fn allow_open(&self, path: &str, read: bool, write: bool) {
         if read {

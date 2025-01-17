@@ -50,7 +50,7 @@ pub struct WebOptions {
     pub resolver: Resolver,
 
     /// OpenTelemetry configuration for the `deno_telemetry` extension
-    pub telemetry_config: deno_telemetry::OtelRuntimeConfig,
+    pub telemetry_config: deno_telemetry::OtelConfig,
 }
 
 impl Default for WebOptions {
@@ -68,10 +68,7 @@ impl Default for WebOptions {
             blob_store: Arc::new(deno_web::BlobStore::default()),
             client_builder_hook: None,
             resolver: Resolver::default(),
-            telemetry_config: deno_telemetry::OtelRuntimeConfig {
-                runtime_name: "rustyscript".into(),
-                runtime_version: env!("CARGO_PKG_VERSION").into(),
-            },
+            telemetry_config: deno_telemetry::OtelConfig::default(),
         }
     }
 }
