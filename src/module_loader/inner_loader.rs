@@ -140,8 +140,11 @@ impl InnerRustyLoader {
         &self,
         specifier: &FastString,
         code: &FastString,
-    ) -> Result<ExtensionTranspilation, AnyError> {
-        let specifier = specifier.as_str().to_module_specifier(&self.cwd)?;
+    ) -> Result<ExtensionTranspilation, deno_error::JsErrorBox> {
+        let specifier = specifier
+            .as_str()
+            .to_module_specifier(&self.cwd)
+            .map_err(|e| deno_error::JsErrorBox::generic(format!("Failed to transpile: {e}")))?;
         let code = code.as_str();
         transpile_extension(&specifier, code)
     }
@@ -317,10 +320,15 @@ impl InnerRustyLoader {
             ),
 
             // Default deny-all
-            _ => ModuleLoadResponse::Sync(Err(anyhow!(
-                "{} imports are not allowed here: {}",
-                module_specifier.scheme(),
-                module_specifier.as_str()
+            _ => ModuleLoadResponse::Sync(Err(deno_core::error::ModuleLoaderError::Core(
+                deno_core::error::CoreError::Io(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    format!(
+                        "{} imports are not allowed here: {}",
+                        module_specifier.scheme(),
+                        module_specifier.as_str()
+                    ),
+                )),
             ))),
         }
     }
@@ -389,7 +397,7 @@ impl InnerRustyLoader {
         inner: Rc<RefCell<Self>>,
         module_specifier: ModuleSpecifier,
         handler: F,
-    ) -> Result<ModuleSource, deno_core::error::AnyError>
+    ) -> Result<ModuleSource, deno_core::error::ModuleLoaderError>
     where
         F: FnOnce(Rc<RefCell<Self>>, ModuleSpecifier) -> Fut,
         Fut: std::future::Future<Output = Result<String, deno_core::error::AnyError>>,
@@ -419,7 +427,13 @@ impl InnerRustyLoader {
         };
 
         // Load the module code, and transpile it if necessary
-        let code = handler(inner.clone(), module_specifier.clone()).await?;
+        let code = handler(inner.clone(), module_specifier.clone())
+            .await
+            .map_err(|e| {
+                deno_core::error::ModuleLoaderError::Core(deno_core::error::CoreError::Io(
+                    std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                ))
+            })?;
         let (tcode, source_map) = transpile(&module_specifier, &code)?;
 
         // Create the module source
@@ -445,7 +459,13 @@ impl InnerRustyLoader {
 
         // Run import provider post-processing
         if let Some(import_provider) = &mut inner.borrow_mut().import_provider {
-            source = import_provider.post_process(&module_specifier, source)?;
+            source = import_provider
+                .post_process(&module_specifier, source)
+                .map_err(|e| {
+                    deno_core::error::ModuleLoaderError::Core(deno_core::error::CoreError::Io(
+                        std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                    ))
+                })?;
         }
 
         Ok(source)

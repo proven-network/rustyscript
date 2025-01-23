@@ -242,7 +242,7 @@ impl RuntimeBuilder {
     #[must_use]
     pub fn with_web_request_builder_hook(
         mut self,
-        hook: fn(&mut http::Request<deno_fetch::ReqBody>) -> Result<(), deno_core::error::AnyError>,
+        hook: fn(&mut http::Request<deno_fetch::ReqBody>) -> Result<(), deno_error::JsErrorBox>,
     ) -> Self {
         self.0.extension_options.web.request_builder_hook = Some(hook);
         self

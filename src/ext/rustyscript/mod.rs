@@ -54,8 +54,8 @@ fn call_registered_function_async(
 }
 
 #[op2(fast)]
-fn op_panic2(#[string] msg: &str) -> Result<(), deno_core::anyhow::Error> {
-    Err(anyhow!(msg.to_string()))
+fn op_panic2(#[string] msg: &str) -> Result<(), std::io::Error> {
+    Err(std::io::Error::new(std::io::ErrorKind::Other, msg))
 }
 
 extension!(

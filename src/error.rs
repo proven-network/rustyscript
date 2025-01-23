@@ -1,5 +1,7 @@
 //! Contains the error type for the runtime
 //! And some associated utilities
+use std::sync::Arc;
+
 use crate::Module;
 use thiserror::Error;
 
@@ -29,49 +31,60 @@ impl Default for ErrorFormattingOptions {
 }
 
 /// Represents the errors that can occur during execution of a module
-#[derive(Error, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Error, Debug, Clone, deno_error::JsError, serde::Serialize, serde::Deserialize)]
 pub enum Error {
     /// Triggers when a module has no stated entrypoint (default or registered at runtime)
+    #[class(generic)]
     #[error("{0} has no entrypoint. Register one, or add a default to the runtime")]
     MissingEntrypoint(Module),
 
     /// Triggers when an attempt to find a value by name fails
+    #[class(generic)]
     #[error("{0} could not be found in global, or module exports")]
     ValueNotFound(String),
 
     /// Triggers when attempting to call a value as a function
+    #[class(generic)]
     #[error("{0} is not a function")]
     ValueNotCallable(String),
 
     /// Triggers when a string could not be encoded for v8
+    #[class(generic)]
     #[error("{0} could not be encoded as a v8 value")]
     V8Encoding(String),
 
     /// Triggers when a result could not be deserialize to the requested type
+    #[class(generic)]
     #[error("value could not be deserialized: {0}")]
     JsonDecode(String),
 
     /// Triggers when a module could not be loaded from the filesystem
+    #[class(generic)]
     #[error("{0}")]
     ModuleNotFound(String),
 
     /// Triggers when attempting to use a worker that has already been shutdown
+    #[class(generic)]
     #[error("This worker has been destroyed")]
     WorkerHasStopped,
 
     /// Triggers on runtime issues during execution of a module
+    #[class(generic)]
     #[error("{0}")]
     Runtime(String),
 
     /// Runtime error we successfully downcast
+    #[class(generic)]
     #[error("{0}")]
     JsError(#[from] deno_core::error::JsError),
 
     /// Triggers when a module times out before finishing
+    #[class(generic)]
     #[error("Module timed out: {0}")]
     Timeout(String),
 
     /// Triggers when the heap (via `max_heap_size`) is exhausted during execution
+    #[class(generic)]
     #[error("Heap exhausted")]
     HeapExhausted,
 }
@@ -183,6 +196,12 @@ mod error_macro {
                 }
             }
         };
+    }
+}
+
+impl From<deno_core::error::CoreError> for Error {
+    fn from(e: deno_core::error::CoreError) -> Self {
+        Error::Runtime(e.to_string())
     }
 }
 

@@ -137,7 +137,7 @@ pub struct RuntimeOptions {
 
     /// Optional snapshot to load into the runtime
     ///
-    /// This will reduce load times, but requires the same extensions to be loaded as when the snapshot was created  
+    /// This will reduce load times, but requires the same extensions to be loaded as when the snapshot was created
     /// If provided, user-supplied extensions must be instantiated with `init_ops` instead of `init_ops_and_esm`
     ///
     /// WARNING: Snapshots MUST be used on the same system they were created on
@@ -215,7 +215,7 @@ impl<RT: RuntimeTrait> InnerRuntime<RT> {
         #[cfg(feature = "web")]
         {
             let otel_conf = options.extension_options.web.telemetry_config.clone();
-            deno_telemetry::init(otel_conf)?;
+            deno_telemetry::init(deno_lib::version::otel_runtime_config(), &otel_conf)?;
         }
 
         // If a snapshot is provided, do not reload ESM for extensions
@@ -736,7 +736,8 @@ impl<RT: RuntimeTrait> InnerRuntime<RT> {
         // Get additional modules first
         for side_module in side_modules {
             let module_specifier = side_module.filename().to_module_specifier(&self.cwd)?;
-            let (code, sourcemap) = transpile(&module_specifier, side_module.contents())?;
+            let (code, sourcemap) = transpile(&module_specifier, side_module.contents())
+                .map_err(|e| Error::Runtime(e.to_string()))?;
 
             // Now CJS translation, for node
             #[cfg(feature = "node_experimental")]
@@ -768,7 +769,8 @@ impl<RT: RuntimeTrait> InnerRuntime<RT> {
         // Load main module
         if let Some(module) = main_module {
             let module_specifier = module.filename().to_module_specifier(&self.cwd)?;
-            let (code, sourcemap) = transpile(&module_specifier, module.contents())?;
+            let (code, sourcemap) = transpile(&module_specifier, module.contents())
+                .map_err(|e| Error::Runtime(e.to_string()))?;
 
             // Now CJS translation, for node
             #[cfg(feature = "node_experimental")]

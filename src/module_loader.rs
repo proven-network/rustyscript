@@ -2,7 +2,7 @@
 //! This module provides tools for caching module data, resolving module specifiers, and loading modules
 #![allow(deprecated)]
 use deno_core::{anyhow::Error, ModuleLoader, ModuleSpecifier};
-use std::{cell::RefCell, path::PathBuf, rc::Rc};
+use std::{borrow::Cow, cell::RefCell, path::PathBuf, rc::Rc};
 
 mod cache_provider;
 mod import_provider;
@@ -81,8 +81,14 @@ impl ModuleLoader for RustyLoader {
         specifier: &str,
         referrer: &str,
         kind: deno_core::ResolutionKind,
-    ) -> Result<ModuleSpecifier, Error> {
-        self.inner_mut().resolve(specifier, referrer, kind)
+    ) -> Result<ModuleSpecifier, deno_core::error::ModuleLoaderError> {
+        self.inner_mut()
+            .resolve(specifier, referrer, kind)
+            .map_err(|e| {
+                deno_core::error::ModuleLoaderError::Core(deno_core::error::CoreError::Io(
+                    std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                ))
+            })
     }
 
     /// Load a module by it's name
@@ -103,8 +109,12 @@ impl ModuleLoader for RustyLoader {
         )
     }
 
-    fn get_source_map(&self, file_name: &str) -> Option<Vec<u8>> {
-        self.inner().get_source_map(file_name)?.1.clone()
+    fn get_source_map(&self, file_name: &str) -> Option<Cow<'_, [u8]>> {
+        self.inner()
+            .get_source_map(file_name)?
+            .1
+            .clone()
+            .map(Cow::from)
     }
 
     fn get_source_mapped_source_line(&self, file_name: &str, line_number: usize) -> Option<String> {

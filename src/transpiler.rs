@@ -4,6 +4,7 @@
 //!
 //! It will only transpile, not typecheck (like Deno's `--no-check` flag).
 
+use deno_ast::diagnostics::Diagnostic;
 use deno_ast::MediaType;
 use deno_ast::ParseParams;
 use deno_ast::SourceTextInfo;
@@ -33,7 +34,10 @@ fn should_transpile(media_type: MediaType) -> bool {
 
 ///
 /// Transpiles source code from TS to JS without typechecking
-pub fn transpile(module_specifier: &ModuleSpecifier, code: &str) -> Result<ModuleContents, Error> {
+pub fn transpile(
+    module_specifier: &ModuleSpecifier,
+    code: &str,
+) -> Result<ModuleContents, deno_error::JsErrorBox> {
     let mut media_type = MediaType::from_specifier(module_specifier);
 
     if media_type == MediaType::Unknown && module_specifier.as_str().contains("/node:") {
@@ -52,7 +56,8 @@ pub fn transpile(module_specifier: &ModuleSpecifier, code: &str) -> Result<Modul
             capture_tokens: false,
             scope_analysis: false,
             maybe_syntax: None,
-        })?;
+        })
+        .map_err(|e| deno_error::JsErrorBox::generic(e.to_string()))?;
 
         let transpile_options = deno_ast::TranspileOptions {
             ..Default::default()
@@ -69,7 +74,8 @@ pub fn transpile(module_specifier: &ModuleSpecifier, code: &str) -> Result<Modul
             ..Default::default()
         };
         let res = parsed
-            .transpile(&transpile_options, &transpile_mod_options, &emit_options)?
+            .transpile(&transpile_options, &transpile_mod_options, &emit_options)
+            .map_err(|e| deno_error::JsErrorBox::generic(e.to_string()))?
             .into_source();
 
         let text = res.text;
@@ -90,12 +96,16 @@ pub fn transpile(module_specifier: &ModuleSpecifier, code: &str) -> Result<Modul
 pub fn transpile_extension(
     specifier: &ModuleSpecifier,
     code: &str,
-) -> Result<(FastString, Option<Cow<'static, [u8]>>), AnyError> {
+) -> Result<(FastString, Option<Cow<'static, [u8]>>), deno_error::JsErrorBox> {
     let (code, source_map) = transpile(specifier, code)?;
     let code = FastString::from(code);
     Ok((code, source_map))
 }
 
-pub type ExtensionTranspiler =
-    Rc<dyn Fn(FastString, FastString) -> Result<(FastString, Option<Cow<'static, [u8]>>), Error>>;
+pub type ExtensionTranspiler = Rc<
+    dyn Fn(
+        FastString,
+        FastString,
+    ) -> Result<(FastString, Option<Cow<'static, [u8]>>), deno_error::JsErrorBox>,
+>;
 pub type ExtensionTranspilation = (FastString, Option<Cow<'static, [u8]>>);
