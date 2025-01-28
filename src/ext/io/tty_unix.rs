@@ -4,8 +4,10 @@
 use std::io::Error;
 
 use deno_core::error::AnyError;
+use deno_core::error::CoreError;
 use deno_core::op2;
 use deno_core::OpState;
+use deno_error::JsErrorBox;
 use rustyline::config::Configurer;
 use rustyline::error::ReadlineError;
 use rustyline::Cmd;
@@ -45,8 +47,7 @@ deno_core::extension!(
 );
 
 #[op2(fast)]
-fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Result<(), AnyError> {
-    let handle_or_fd = state.resource_table.get_fd(rid)?;
+fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Result<(), JsErrorBox> {
     fn prepare_stdio() {
         // SAFETY: Save current state of stdio and restore it when we exit.
         unsafe {
@@ -77,12 +78,6 @@ fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Resu
         }
     }
 
-    prepare_stdio();
-    let tty_mode_store = state.borrow::<TtyModeStore>().clone();
-    let previous_mode = tty_mode_store.get(rid);
-
-    let raw_fd = handle_or_fd;
-
     fn wrap_fd<'a>(
         _r: &'a deno_core::ResourceTable,
         fd: std::os::fd::RawFd,
@@ -94,18 +89,31 @@ fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Resu
             _ => Some(unsafe { std::os::fd::BorrowedFd::borrow_raw(fd) }),
         }
     }
+
+    let handle_or_fd = state
+        .resource_table
+        .get_fd(rid)
+        .map_err(JsErrorBox::from_err)?;
+    let tty_mode_store = state.borrow::<TtyModeStore>().clone();
+    let previous_mode = tty_mode_store.get(rid);
+
+    let raw_fd = handle_or_fd;
     let fd = wrap_fd(&state.resource_table, raw_fd)
-        .ok_or(deno_core::anyhow::anyhow!("bad file descriptor"))?;
+        .ok_or(CoreError::Io(std::io::Error::from_raw_os_error(
+            libc::EBADF,
+        )))
+        .map_err(JsErrorBox::from_err)?;
 
     if is_raw {
-        let mut raw = match previous_mode {
-            Some(mode) => mode,
-            None => {
-                // Save original mode.
-                let original_mode = termios::tcgetattr(fd)?;
-                tty_mode_store.set(rid, original_mode.clone());
-                original_mode
-            }
+        let mut raw = if let Some(mode) = previous_mode {
+            mode
+        } else {
+            // Save original mode.
+            let original_mode = termios::tcgetattr(fd)
+                .map_err(|e| CoreError::Io(std::io::Error::from_raw_os_error(e as i32)))
+                .map_err(JsErrorBox::from_err)?;
+            tty_mode_store.set(rid, original_mode.clone());
+            original_mode
         };
 
         raw.input_flags &= !(termios::InputFlags::BRKINT
@@ -124,11 +132,15 @@ fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Resu
         }
         raw.control_chars[termios::SpecialCharacterIndices::VMIN as usize] = 1;
         raw.control_chars[termios::SpecialCharacterIndices::VTIME as usize] = 0;
-        termios::tcsetattr(fd, termios::SetArg::TCSADRAIN, &raw)?;
+        termios::tcsetattr(fd, termios::SetArg::TCSADRAIN, &raw).map_err(|e| {
+            JsErrorBox::from_err(CoreError::Io(std::io::Error::from_raw_os_error(e as i32)))
+        })?;
     } else {
         // Try restore saved mode.
         if let Some(mode) = tty_mode_store.take(rid) {
-            termios::tcsetattr(fd, termios::SetArg::TCSADRAIN, &mode)?;
+            termios::tcsetattr(fd, termios::SetArg::TCSADRAIN, &mode).map_err(|e| {
+                JsErrorBox::from_err(CoreError::Io(std::io::Error::from_raw_os_error(e as i32)))
+            })?;
         }
     }
 
@@ -136,14 +148,21 @@ fn op_set_raw(state: &mut OpState, rid: u32, is_raw: bool, cbreak: bool) -> Resu
 }
 
 #[op2(fast)]
-fn op_console_size(state: &mut OpState, #[buffer] result: &mut [u32]) -> Result<(), AnyError> {
+fn op_console_size(state: &mut OpState, #[buffer] result: &mut [u32]) -> Result<(), JsErrorBox> {
     fn check_console_size(
         state: &mut OpState,
         result: &mut [u32],
         rid: u32,
-    ) -> Result<(), AnyError> {
-        let fd = state.resource_table.get_fd(rid)?;
-        let size = console_size_from_fd(fd)?;
+    ) -> Result<(), JsErrorBox> {
+        let fd = state
+            .resource_table
+            .get_fd(rid)
+            .map_err(JsErrorBox::from_err)?;
+        let size = console_size_from_fd(fd).map_err(|e| {
+            JsErrorBox::from_err(CoreError::Io(std::io::Error::from_raw_os_error(
+                e.raw_os_error().unwrap_or(libc::EINVAL),
+            )))
+        })?;
         result[0] = size.cols;
         result[1] = size.rows;
         Ok(())
@@ -172,12 +191,12 @@ fn console_size_from_fd(fd: std::os::unix::prelude::RawFd) -> Result<ConsoleSize
     // SAFETY: libc calls
     unsafe {
         let mut size: libc::winsize = std::mem::zeroed();
-        if libc::ioctl(fd, libc::TIOCGWINSZ, &mut size as *mut _) != 0 {
+        if libc::ioctl(fd, libc::TIOCGWINSZ, std::ptr::from_mut(&mut size)) != 0 {
             return Err(Error::last_os_error());
         }
         Ok(ConsoleSize {
-            cols: size.ws_col as u32,
-            rows: size.ws_row as u32,
+            cols: u32::from(size.ws_col),
+            rows: u32::from(size.ws_row),
         })
     }
 }
@@ -187,7 +206,7 @@ fn console_size_from_fd(fd: std::os::unix::prelude::RawFd) -> Result<ConsoleSize
 pub fn op_read_line_prompt(
     #[string] prompt_text: &str,
     #[string] default_value: &str,
-) -> Result<Option<String>, AnyError> {
+) -> Result<Option<String>, JsErrorBox> {
     let mut editor =
         Editor::<(), rustyline::history::DefaultHistory>::new().expect("Failed to create editor.");
 
@@ -205,6 +224,9 @@ pub fn op_read_line_prompt(
             Ok(None)
         }
         Err(ReadlineError::Eof) => Ok(None),
-        Err(err) => Err(err.into()),
+        Err(err) => Err(JsErrorBox::from_err(CoreError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            err,
+        )))),
     }
 }
