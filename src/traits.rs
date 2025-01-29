@@ -1,6 +1,7 @@
 use crate::Error;
 use deno_core::v8::{self, HandleScope};
 use deno_core::ModuleSpecifier;
+use deno_path_util::PathToUrlError;
 use std::path::Path;
 
 /// Converts a string representing a relative or absolute path into a
@@ -11,11 +12,11 @@ use std::path::Path;
 fn resolve_path(
     path_str: impl AsRef<Path>,
     current_dir: &Path,
-) -> Result<ModuleSpecifier, deno_core::ModuleResolutionError> {
+) -> Result<ModuleSpecifier, PathToUrlError> {
     let path = current_dir.join(path_str);
     let path = deno_core::normalize_path(path);
-    deno_core::url::Url::from_file_path(&path)
-        .map_err(|()| deno_core::ModuleResolutionError::InvalidPath(path))
+
+    deno_path_util::url_from_file_path(&path)
 }
 
 pub trait ToModuleSpecifier {
@@ -24,7 +25,7 @@ pub trait ToModuleSpecifier {
 
 impl<T: AsRef<Path>> ToModuleSpecifier for T {
     fn to_module_specifier(&self, base: &Path) -> Result<ModuleSpecifier, Error> {
-        Ok(resolve_path(self, base)?)
+        resolve_path(self, base).map_err(|e| Error::ModuleNotFound(e.to_string()))
     }
 }
 

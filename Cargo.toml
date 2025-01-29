@@ -166,6 +166,7 @@ paste = "1.0.15"
 deno_core = { workspace = true }
 deno_error = { workspace = true }
 deno_lib = { workspace = true }
+deno_path_util = { workspace = true }
 
 # For transpiling typescript
 deno_ast = { workspace = true, features = ["transpiling", "cjs"]}
