@@ -153,14 +153,14 @@ worker = []
 
 [dependencies]
 maybe_path = "0.1.3"
-thiserror = "2.0.4"
-serde = "1.0.215"
+thiserror = { workspace = true }
+serde = { workspace = true }
 
 # Used for NodeJS compatibility and other features
-async-trait = "0.1.83"
+async-trait = { workspace = true }
 
 # Used to generate identifiers for callbacks
-paste = "1.0.15"
+paste = { workspace = true }
 
 # The deno runtime itself, and the webidl extension for the web APIs
 deno_core = { workspace = true }

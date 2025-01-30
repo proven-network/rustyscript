@@ -81,5 +81,7 @@ fn op_http_start(
         ));
     }
 
-    Err(HttpStartError::Other(deno_core::error::bad_resource_id()))
+    Err(HttpStartError::Other(
+        deno_core::error::ResourceError::BadResourceId,
+    ))
 }
