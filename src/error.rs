@@ -1,8 +1,10 @@
 //! Contains the error type for the runtime
 //! And some associated utilities
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use crate::Module;
+use deno_error::JsErrorClass;
 use thiserror::Error;
 
 /// Options for [`Error::as_highlighted`]
@@ -77,6 +79,15 @@ pub enum Error {
     #[class(generic)]
     #[error("{0}")]
     JsError(#[from] deno_core::error::JsError),
+
+    /// Runtime error we successfully downcast
+    #[class(generic)]
+    #[error("{0}: {1}")]
+    JsErrorBox(
+        Cow<'static, str>,
+        Cow<'static, str>,
+        Vec<(Cow<'static, str>, Cow<'static, str>)>,
+    ),
 
     /// Triggers when a module times out before finishing
     #[class(generic)]
@@ -200,8 +211,17 @@ mod error_macro {
 }
 
 impl From<deno_core::error::CoreError> for Error {
-    fn from(e: deno_core::error::CoreError) -> Self {
-        Error::Runtime(e.to_string())
+    fn from(error: deno_core::error::CoreError) -> Self {
+        match error {
+            deno_core::error::CoreError::Js(js_error) => Self::JsError(js_error),
+            deno_core::error::CoreError::JsBox(js_error_box) => Self::JsErrorBox(
+                js_error_box.get_class(),
+                js_error_box.get_message(),
+                js_error_box.get_additional_properties(),
+            ),
+
+            _ => Error::Runtime(error.to_string()),
+        }
     }
 }
 
