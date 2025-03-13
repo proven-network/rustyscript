@@ -215,7 +215,7 @@ impl<RT: RuntimeTrait> InnerRuntime<RT> {
         #[cfg(feature = "web")]
         {
             let otel_conf = options.extension_options.web.telemetry_config.clone();
-            deno_telemetry::init(deno_lib::version::otel_runtime_config(), &otel_conf)?;
+            deno_telemetry::init(deno_lib::version::otel_runtime_config(), otel_conf)?;
         }
 
         // If a snapshot is provided, do not reload ESM for extensions

@@ -1,3 +1,4 @@
+use deno_fs::FsError;
 use deno_permissions::{PermissionCheckError, PermissionDeniedError};
 use std::{
     borrow::Cow,
@@ -73,7 +74,7 @@ impl WebPermissions for DefaultWebPermissions {
         &self,
         p: &'a Path,
         api_name: Option<&str>,
-    ) -> Result<Cow<'a, Path>, PermissionDenied> {
+    ) -> Result<Cow<'a, Path>, FsError> {
         Ok(Cow::Borrowed(p))
     }
 
@@ -316,12 +317,12 @@ impl WebPermissions for AllowlistWebPermissions {
         &self,
         p: &'a Path,
         api_name: Option<&str>,
-    ) -> Result<Cow<'a, Path>, PermissionDenied> {
+    ) -> Result<Cow<'a, Path>, FsError> {
         let inst = self.borrow();
         if inst.read_all && inst.read_paths.contains(p.to_str().unwrap()) {
             Ok(Cow::Borrowed(p))
         } else {
-            PermissionDenied::oops(p.display())?
+            Err(FsError::NotCapable("Permission denied for reading"))
         }
     }
 
@@ -371,10 +372,13 @@ impl WebPermissions for AllowlistWebPermissions {
         api_name: &str,
     ) -> Result<(), PermissionDenied> {
         if !self.borrow().read_all {
-            return PermissionDenied::oops("read_all")?;
+            return Err(PermissionDenied::new("read_all", "Not Allowed"));
         }
-        self.check_read(p, Some(api_name))?;
-        Ok(())
+        
+        match self.check_read(p, Some(api_name)) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(PermissionDenied::new(display, "Not Allowed"))
+        }
     }
 
     fn check_write_all(&self, api_name: &str) -> Result<(), PermissionDenied> {
@@ -468,7 +472,7 @@ pub trait WebPermissions: std::fmt::Debug + Send + Sync {
         &self,
         p: &'a Path,
         api_name: Option<&str>,
-    ) -> Result<Cow<'a, Path>, PermissionDenied>;
+    ) -> Result<Cow<'a, Path>, FsError>;
 
     /// Check if all paths are allowed to be read by fs
     ///
@@ -640,9 +644,10 @@ impl deno_fetch::FetchPermissions for PermissionsContainer {
 
     fn check_read<'a>(
         &mut self,
+        _resolved: bool,
         p: &'a Path,
         api_name: &str,
-    ) -> Result<Cow<'a, Path>, PermissionCheckError> {
+    ) -> Result<Cow<'a, Path>, FsError> {
         let p = self.0.check_read(p, Some(api_name))?;
         Ok(p)
     }
@@ -658,11 +663,12 @@ impl deno_net::NetPermissions for PermissionsContainer {
     }
 
     fn check_read(&mut self, p: &str, api_name: &str) -> Result<PathBuf, PermissionCheckError> {
-        let p = self
-            .0
-            .check_read(Path::new(p), Some(api_name))
-            .map(std::borrow::Cow::into_owned)?;
-        Ok(p)
+        match self.0.check_read(Path::new(p), Some(api_name)) {
+            Ok(cow) => Ok(cow.into_owned()),
+            Err(_) => Err(PermissionCheckError::PermissionDenied(PermissionDeniedError::Fatal { 
+                access: format!("read access to {}", p)
+            }))
+        }
     }
 
     fn check_write(&mut self, p: &str, api_name: &str) -> Result<PathBuf, PermissionCheckError> {

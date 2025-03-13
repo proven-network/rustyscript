@@ -4,7 +4,7 @@ use super::{web::PermissionsContainer, ExtensionTrait};
 use deno_core::{extension, Extension};
 use deno_fs::FileSystemRc;
 use deno_io::fs::FsError;
-use deno_permissions::PermissionCheckError;
+use deno_permissions::{PermissionCheckError, PermissionDeniedError};
 
 extension!(
     init_fs,
@@ -50,11 +50,12 @@ impl deno_fs::FsPermissions for PermissionsContainer {
         api_name: &str,
     ) -> Result<std::path::PathBuf, PermissionCheckError> {
         self.0.check_read_all(Some(api_name))?;
-        let p = self
-            .0
-            .check_read(Path::new(path), Some(api_name))
-            .map(std::borrow::Cow::into_owned)?;
-        Ok(p)
+        match self.0.check_read(Path::new(path), Some(api_name)) {
+            Ok(cow) => Ok(cow.into_owned()),
+            Err(_) => Err(PermissionCheckError::PermissionDenied(PermissionDeniedError::Fatal { 
+                access: "read access".to_string() 
+            }))
+        }
     }
 
     fn check_read_path<'a>(
@@ -63,8 +64,12 @@ impl deno_fs::FsPermissions for PermissionsContainer {
         api_name: &str,
     ) -> Result<std::borrow::Cow<'a, std::path::Path>, PermissionCheckError> {
         self.0.check_read_all(Some(api_name))?;
-        let p = self.0.check_read(path, Some(api_name))?;
-        Ok(p)
+        match self.0.check_read(path, Some(api_name)) {
+            Ok(cow) => Ok(cow),
+            Err(_) => Err(PermissionCheckError::PermissionDenied(PermissionDeniedError::Fatal { 
+                access: "read access".to_string() 
+            }))
+        }
     }
 
     fn check_read_all(&mut self, api_name: &str) -> Result<(), PermissionCheckError> {
@@ -89,11 +94,12 @@ impl deno_fs::FsPermissions for PermissionsContainer {
         api_name: &str,
     ) -> Result<std::path::PathBuf, PermissionCheckError> {
         self.0.check_write_all(api_name)?;
-        let p = self
-            .0
-            .check_write(Path::new(path), Some(api_name))
-            .map(std::borrow::Cow::into_owned)?;
-        Ok(p)
+        match self.0.check_write(Path::new(path), Some(api_name)) {
+            Ok(cow) => Ok(cow.into_owned()),
+            Err(_) => Err(PermissionCheckError::PermissionDenied(PermissionDeniedError::Fatal { 
+                access: "write access".to_string() 
+            }))
+        }
     }
 
     fn check_write_path<'a>(
@@ -102,8 +108,12 @@ impl deno_fs::FsPermissions for PermissionsContainer {
         api_name: &str,
     ) -> Result<std::borrow::Cow<'a, std::path::Path>, PermissionCheckError> {
         self.0.check_write_all(api_name)?;
-        let p = self.0.check_write(path, Some(api_name))?;
-        Ok(p)
+        match self.0.check_write(path, Some(api_name)) {
+            Ok(cow) => Ok(cow),
+            Err(_) => Err(PermissionCheckError::PermissionDenied(PermissionDeniedError::Fatal { 
+                access: "write access".to_string() 
+            }))
+        }
     }
 
     fn check_write_partial(
@@ -112,8 +122,12 @@ impl deno_fs::FsPermissions for PermissionsContainer {
         api_name: &str,
     ) -> Result<std::path::PathBuf, PermissionCheckError> {
         self.0.check_write_all(api_name)?;
-        let p = self.0.check_write_partial(path, api_name)?;
-        Ok(p)
+        match self.0.check_write_partial(path, api_name) {
+            Ok(p) => Ok(p),
+            Err(_) => Err(PermissionCheckError::PermissionDenied(PermissionDeniedError::Fatal { 
+                access: "write access".to_string() 
+            }))
+        }
     }
 
     fn check_write_all(&mut self, api_name: &str) -> Result<(), PermissionCheckError> {
