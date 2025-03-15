@@ -7,7 +7,6 @@
 /// Notes:
 /// - When using the async variants of the functions it is important to complete the JS event loop with [Runtime::await_event_loop]
 /// - Async variants will wait for the function's return value to resolve, but will not wait for the event loop to complete
-///
 use rustyscript::{js_value::Promise, json_args, Error, Module, Runtime};
 
 fn main() -> Result<(), Error> {

@@ -1,7 +1,6 @@
 //!
 //! This example will demonstrate usage of the `ImportProvider` trait to implement a cache for module loading.
 //! This one will be a simple in-memory cache
-//!
 use deno_core::{anyhow::Error, ModuleSource, ModuleSpecifier};
 use rustyscript::{module_loader::ImportProvider, Module, Runtime, RuntimeOptions};
 use std::collections::HashMap;

@@ -137,26 +137,24 @@ mod runtime_macros {
     ///
     /// # Example
     /// ```rust
-    /// use rustyscript::{ Runtime, RuntimeOptions, Module, json_args };
+    /// use rustyscript::{json_args, Module, Runtime, RuntimeOptions};
     /// use std::time::Duration;
     ///
     /// # fn main() -> Result<(), rustyscript::Error> {
-    /// let module = Module::new("test.js", "
+    /// let module = Module::new(
+    ///     "test.js",
+    ///     "
     ///     function load(a, b) {
     ///         console.log(`Hello world: a=${a}, b=${b}`);
     ///     }
     ///     rustyscript.register_entrypoint(load);
-    /// ");
+    /// ",
+    /// );
     ///
-    /// Runtime::execute_module(
-    ///     &module, vec![],
-    ///     Default::default(),
-    ///     json_args!("test", 5)
-    /// )?;
+    /// Runtime::execute_module(&module, vec![], Default::default(), json_args!("test", 5))?;
     /// # Ok(())
     /// # }
     /// ```
-    ///
     #[macro_export]
     macro_rules! json_args {
         ($($arg:expr),*) => {
@@ -174,26 +172,29 @@ mod runtime_macros {
     ///
     /// # Example
     /// ```rust
-    /// use rustyscript::{ Runtime, RuntimeOptions, Module, big_json_args };
+    /// use rustyscript::{big_json_args, Module, Runtime, RuntimeOptions};
     /// use std::time::Duration;
     ///
     /// # fn main() -> Result<(), rustyscript::Error> {
-    /// let module = Module::new("test.js", "
+    /// let module = Module::new(
+    ///     "test.js",
+    ///     "
     ///     function load(a, b) {
     ///         console.log(`Hello world: a=${a}, b=${b}`);
     ///     }
     ///     rustyscript.register_entrypoint(load);
-    /// ");
+    /// ",
+    /// );
     ///
     /// Runtime::execute_module(
-    ///     &module, vec![],
+    ///     &module,
+    ///     vec![],
     ///     Default::default(),
-    ///     big_json_args!("test", 5)
+    ///     big_json_args!("test", 5),
     /// )?;
     /// # Ok(())
     /// # }
     /// ```
-    ///
     #[macro_export]
     macro_rules! big_json_args {
         ($($arg:expr),*) => {
@@ -208,12 +209,8 @@ mod runtime_macros {
     ///
     /// # Example
     /// ```rust
-    /// use rustyscript::{ Error, sync_callback };
-    /// let add = sync_callback!(
-    ///     |a: i64, b: i64| {
-    ///         Ok::<i64, Error>(a + b)
-    ///     }
-    /// );
+    /// use rustyscript::{sync_callback, Error};
+    /// let add = sync_callback!(|a: i64, b: i64| { Ok::<i64, Error>(a + b) });
     /// ```
     #[macro_export]
     macro_rules! sync_callback {
@@ -237,12 +234,8 @@ mod runtime_macros {
     ///
     /// # Example
     /// ```rust
-    /// use rustyscript::{ Error, async_callback };
-    /// let add = async_callback!(
-    ///     |a: i64, b: i64| async move {
-    ///         Ok::<i64, Error>(a + b)
-    ///     }
-    /// );
+    /// use rustyscript::{async_callback, Error};
+    /// let add = async_callback!(|a: i64, b: i64| async move { Ok::<i64, Error>(a + b) });
     /// ```
     #[macro_export]
     macro_rules! async_callback {

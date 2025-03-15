@@ -16,7 +16,6 @@
 ///
 /// Instead of just vec![], one could pass in other JS modules
 /// which could be imported using `import './filename.js';`
-///
 use rustyscript::{json_args, Error, Module, Runtime};
 
 fn main() -> Result<(), Error> {

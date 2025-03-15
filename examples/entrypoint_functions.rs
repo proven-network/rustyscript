@@ -7,7 +7,6 @@
 /// The same effect can be achieved by calling a function later, so they are optional
 /// They are most useful in the context of Runtime::execute_module, which can be seen
 /// in the 'hello_world' example.
-///
 use rustyscript::{json_args, Error, Module, Runtime, RuntimeOptions, Undefined};
 
 fn main() -> Result<(), Error> {

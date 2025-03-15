@@ -10,7 +10,6 @@
 ///
 /// Extensions consist of a set of #[op2] functions, an extension! macro,
 /// and one or more optional JS modules.
-///
 use rustyscript::{module, Error, Module, ModuleHandle, Runtime, RuntimeOptions};
 use std::time::Duration;
 

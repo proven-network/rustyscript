@@ -2,7 +2,6 @@ use deno_core::serde_json;
 ///
 /// This example shows how to use the threaded worker feature using a custom implementation of a worker
 /// We will create a basic worker implementation able to execute snippets of non-emca JS
-///
 use rustyscript::{
     worker::{InnerWorker, Worker},
     Error, Runtime,

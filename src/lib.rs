@@ -35,7 +35,7 @@
 //! - Call a function registered as the entrypoint
 //! - Return the resulting value
 //! ```rust
-//! use rustyscript::{json_args, Runtime, Module, Error};
+//! use rustyscript::{json_args, Error, Module, Runtime};
 //!
 //! # fn main() -> Result<(), Error> {
 //! let module = Module::new(
@@ -45,14 +45,11 @@
 //!         console.log(`Hello world: string=${string}, integer=${integer}`);
 //!         return 2;
 //!     }
-//!     "
+//!     ",
 //! );
 //!
-//! let value: usize = Runtime::execute_module(
-//!     &module, vec![],
-//!     Default::default(),
-//!     json_args!("test", 5)
-//! )?;
+//! let value: usize =
+//!     Runtime::execute_module(&module, vec![], Default::default(), json_args!("test", 5))?;
 //!
 //! assert_eq!(value, 2);
 //! # Ok(())
@@ -70,9 +67,11 @@
 //!
 //! Or to just import a single module for use:
 //! ```no_run
-//! use rustyscript::{json_args, import};
+//! use rustyscript::{import, json_args};
 //! let mut module = import("js/my_module.js").expect("Something went wrong!");
-//! let value: String = module.call("exported_function_name", json_args!()).expect("Could not get a value!");
+//! let value: String = module
+//!     .call("exported_function_name", json_args!())
+//!     .expect("Could not get a value!");
 //! ```
 //!
 //! There are a few other utilities included, such as [`validate`] and [`resolve_path`]
@@ -121,7 +120,7 @@
 //!
 //! Rust functions can also be registered to be called from javascript:
 //! ```rust
-//! use rustyscript::{ Runtime, Module, serde_json::Value };
+//! use rustyscript::{serde_json::Value, Module, Runtime};
 //!
 //! # fn main() -> Result<(), rustyscript::Error> {
 //! let module = Module::new("test.js", " rustyscript.functions.foo(); ");
@@ -282,7 +281,6 @@
 //! ----
 //!
 //! For an example of this crate in use, see [Lavendeux](https://github.com/rscarson/lavendeux)
-//!
 #![warn(missing_docs)]
 #![warn(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)] //   Does not account for crate-level re-exports

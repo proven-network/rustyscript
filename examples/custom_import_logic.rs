@@ -5,7 +5,6 @@
 //! In this case, I will allowing for two new import schemes:
 //! - `static:`: This scheme will allow for static modules to be imported by their specifier
 //! - `redirect:`: This scheme will allow for modules to be redirected to a different specifier
-//!
 use deno_core::{anyhow::anyhow, ModuleSpecifier};
 use rustyscript::{module_loader::ImportProvider, Module, Runtime, RuntimeOptions};
 use std::collections::HashMap;

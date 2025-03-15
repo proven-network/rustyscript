@@ -5,7 +5,6 @@
 ///
 /// See `examples/default_threaded_worker` and `examples/custom_threaded_worker`
 /// for a more flexible way to run rustyscript in a threaded environment
-///
 use rustyscript::{module, static_runtime, Error, Module, RuntimeOptions};
 use std::time::Duration;
 

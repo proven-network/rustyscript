@@ -374,10 +374,10 @@ impl WebPermissions for AllowlistWebPermissions {
         if !self.borrow().read_all {
             return Err(PermissionDenied::new("read_all", "Not Allowed"));
         }
-        
+
         match self.check_read(p, Some(api_name)) {
             Ok(_) => Ok(()),
-            Err(_) => Err(PermissionDenied::new(display, "Not Allowed"))
+            Err(_) => Err(PermissionDenied::new(display, "Not Allowed")),
         }
     }
 
@@ -468,11 +468,8 @@ pub trait WebPermissions: std::fmt::Debug + Send + Sync {
     ///
     /// # Errors
     /// If an error is returned, the operation will be denied with the error message as the reason
-    fn check_read<'a>(
-        &self,
-        p: &'a Path,
-        api_name: Option<&str>,
-    ) -> Result<Cow<'a, Path>, FsError>;
+    fn check_read<'a>(&self, p: &'a Path, api_name: Option<&str>)
+        -> Result<Cow<'a, Path>, FsError>;
 
     /// Check if all paths are allowed to be read by fs
     ///
@@ -665,9 +662,11 @@ impl deno_net::NetPermissions for PermissionsContainer {
     fn check_read(&mut self, p: &str, api_name: &str) -> Result<PathBuf, PermissionCheckError> {
         match self.0.check_read(Path::new(p), Some(api_name)) {
             Ok(cow) => Ok(cow.into_owned()),
-            Err(_) => Err(PermissionCheckError::PermissionDenied(PermissionDeniedError::Fatal { 
-                access: format!("read access to {}", p)
-            }))
+            Err(_) => Err(PermissionCheckError::PermissionDenied(
+                PermissionDeniedError::Fatal {
+                    access: format!("read access to {}", p),
+                },
+            )),
         }
     }
 

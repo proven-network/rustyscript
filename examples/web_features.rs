@@ -4,7 +4,6 @@ use rustyscript::{json_args, Error, Module, Runtime, RuntimeOptions};
 /// Stuff like setTimeout, atob/btoa, file reads and fetch are all examples
 ///
 /// We will focus on timers and fetch here
-///
 use std::time::Duration;
 
 fn main() -> Result<(), Error> {

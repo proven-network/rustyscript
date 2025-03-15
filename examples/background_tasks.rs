@@ -4,7 +4,6 @@ use deno_core::PollEventLoopOptions;
 ///
 /// This example the use of async module loading, and the handing of ongoing
 /// background tasks.
-///
 use rustyscript::{Error, Module, ModuleHandle, Runtime, RuntimeOptions};
 
 fn main() -> Result<(), Error> {

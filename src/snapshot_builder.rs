@@ -23,14 +23,14 @@ use tokio_util::sync::CancellationToken;
 /// # Example
 ///
 /// ```rust
-/// use rustyscript::{SnapshotBuilder, Module, Error};
+/// use rustyscript::{Error, Module, SnapshotBuilder};
 /// use std::fs;
 ///
 /// # fn main() -> Result<(), Error> {
 /// let module = Module::new("example.js", "export function example() { return 42; }");
 /// let snapshot = SnapshotBuilder::new(Default::default())?
-///    .with_module(&module)?
-///    .finish();
+///     .with_module(&module)?
+///     .finish();
 ///
 /// // Save the snapshot to a file
 /// fs::write("snapshot.bin", snapshot)?;
@@ -60,7 +60,7 @@ impl SnapshotBuilder {
     ///
     /// # Example
     /// ```rust
-    /// use rustyscript::{ json_args, Runtime, RuntimeOptions, Module };
+    /// use rustyscript::{json_args, Module, Runtime, RuntimeOptions};
     /// use std::time::Duration;
     ///
     /// # fn main() -> Result<(), rustyscript::Error> {
@@ -72,11 +72,14 @@ impl SnapshotBuilder {
     ///     ..Default::default()
     /// })?;
     ///
-    /// let module = Module::new("test.js", "
+    /// let module = Module::new(
+    ///     "test.js",
+    ///     "
     ///     export const load = () => {
     ///         return 'Hello World!';
     ///     }
-    /// ");
+    /// ",
+    /// );
     ///
     /// let module_handle = runtime.load_module(&module)?;
     /// let value: String = runtime.call_entrypoint(&module_handle, json_args!())?;
@@ -88,7 +91,6 @@ impl SnapshotBuilder {
     /// # Errors
     /// Can fail if the tokio runtime cannot be created,
     /// Or if the deno runtime initialization fails (usually issues with extensions)
-    ///
     pub fn new(options: RuntimeOptions) -> Result<Self, Error> {
         let tokio = AsyncBridge::new(options.timeout)?;
         let inner = InnerRuntime::new(options, tokio.heap_exhausted_token())?;
@@ -212,7 +214,7 @@ impl SnapshotBuilder {
 
     /// Remove and return a value from the state, if one exists
     /// ```rust
-    /// use rustyscript::{ Runtime };
+    /// use rustyscript::Runtime;
     ///
     /// # fn main() -> Result<(), rustyscript::Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -237,7 +239,7 @@ impl SnapshotBuilder {
     /// Can fail if the inner state cannot be borrowed mutably
     ///
     /// ```rust
-    /// use rustyscript::{ Runtime };
+    /// use rustyscript::Runtime;
     ///
     /// # fn main() -> Result<(), rustyscript::Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -431,7 +433,7 @@ impl SnapshotBuilder {
     /// # Example
     ///
     /// ```rust
-    /// use rustyscript::{ json_args, Runtime, Module, Error };
+    /// use rustyscript::{json_args, Error, Module, Runtime};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -479,7 +481,7 @@ impl SnapshotBuilder {
     /// # Example
     ///
     /// ```rust
-    /// use rustyscript::{ json_args, Runtime, Module, Error };
+    /// use rustyscript::{json_args, Error, Module, Runtime};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -524,7 +526,7 @@ impl SnapshotBuilder {
     /// # Example
     ///
     /// ```rust
-    /// use rustyscript::{ Runtime, Module, Error };
+    /// use rustyscript::{Error, Module, Runtime};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -594,7 +596,7 @@ impl SnapshotBuilder {
     /// # Example
     ///
     /// ```rust
-    /// use rustyscript::{ Runtime, Module, Error };
+    /// use rustyscript::{Error, Module, Runtime};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -637,7 +639,7 @@ impl SnapshotBuilder {
     ///
     /// ```rust
     /// // Create a module with filename and contents
-    /// use rustyscript::{Runtime, Module, Error};
+    /// use rustyscript::{Error, Module, Runtime};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -703,7 +705,7 @@ impl SnapshotBuilder {
     ///
     /// ```rust
     /// // Create a module with filename and contents
-    /// use rustyscript::{Runtime, Module, Error};
+    /// use rustyscript::{Error, Module, Runtime};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let mut runtime = Runtime::new(Default::default())?;

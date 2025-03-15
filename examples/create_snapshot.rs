@@ -3,7 +3,6 @@
 /// Snapshots can be used to massively decrease the startup time of a Runtime instance (15ms -> 3ms) by pre-loading
 /// extensions and modules into the runtime state before it is created. A snapshot can be used on any runtime with
 /// the same set of extensions and options as the runtime that created it.
-///
 use rustyscript::{Error, Module, SnapshotBuilder};
 use std::fs;
 

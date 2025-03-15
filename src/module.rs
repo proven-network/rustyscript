@@ -20,12 +20,9 @@ use std::path::{Path, PathBuf};
 /// # Example
 ///
 /// ```rust
-/// use rustyscript::{ module, Module };
+/// use rustyscript::{module, Module};
 ///
-/// const MY_SCRIPT: Module = module!(
-///     "filename.js",
-///     "export const myValue = 42;"
-/// );
+/// const MY_SCRIPT: Module = module!("filename.js", "export const myValue = 42;");
 /// ```
 #[macro_export]
 macro_rules! module {

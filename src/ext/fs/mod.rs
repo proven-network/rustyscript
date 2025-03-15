@@ -52,9 +52,11 @@ impl deno_fs::FsPermissions for PermissionsContainer {
         self.0.check_read_all(Some(api_name))?;
         match self.0.check_read(Path::new(path), Some(api_name)) {
             Ok(cow) => Ok(cow.into_owned()),
-            Err(_) => Err(PermissionCheckError::PermissionDenied(PermissionDeniedError::Fatal { 
-                access: "read access".to_string() 
-            }))
+            Err(_) => Err(PermissionCheckError::PermissionDenied(
+                PermissionDeniedError::Fatal {
+                    access: "read access".to_string(),
+                },
+            )),
         }
     }
 
@@ -66,9 +68,11 @@ impl deno_fs::FsPermissions for PermissionsContainer {
         self.0.check_read_all(Some(api_name))?;
         match self.0.check_read(path, Some(api_name)) {
             Ok(cow) => Ok(cow),
-            Err(_) => Err(PermissionCheckError::PermissionDenied(PermissionDeniedError::Fatal { 
-                access: "read access".to_string() 
-            }))
+            Err(_) => Err(PermissionCheckError::PermissionDenied(
+                PermissionDeniedError::Fatal {
+                    access: "read access".to_string(),
+                },
+            )),
         }
     }
 
@@ -96,9 +100,11 @@ impl deno_fs::FsPermissions for PermissionsContainer {
         self.0.check_write_all(api_name)?;
         match self.0.check_write(Path::new(path), Some(api_name)) {
             Ok(cow) => Ok(cow.into_owned()),
-            Err(_) => Err(PermissionCheckError::PermissionDenied(PermissionDeniedError::Fatal { 
-                access: "write access".to_string() 
-            }))
+            Err(_) => Err(PermissionCheckError::PermissionDenied(
+                PermissionDeniedError::Fatal {
+                    access: "write access".to_string(),
+                },
+            )),
         }
     }
 
@@ -110,9 +116,11 @@ impl deno_fs::FsPermissions for PermissionsContainer {
         self.0.check_write_all(api_name)?;
         match self.0.check_write(path, Some(api_name)) {
             Ok(cow) => Ok(cow),
-            Err(_) => Err(PermissionCheckError::PermissionDenied(PermissionDeniedError::Fatal { 
-                access: "write access".to_string() 
-            }))
+            Err(_) => Err(PermissionCheckError::PermissionDenied(
+                PermissionDeniedError::Fatal {
+                    access: "write access".to_string(),
+                },
+            )),
         }
     }
 
@@ -124,9 +132,11 @@ impl deno_fs::FsPermissions for PermissionsContainer {
         self.0.check_write_all(api_name)?;
         match self.0.check_write_partial(path, api_name) {
             Ok(p) => Ok(p),
-            Err(_) => Err(PermissionCheckError::PermissionDenied(PermissionDeniedError::Fatal { 
-                access: "write access".to_string() 
-            }))
+            Err(_) => Err(PermissionCheckError::PermissionDenied(
+                PermissionDeniedError::Fatal {
+                    access: "write access".to_string(),
+                },
+            )),
         }
     }
 

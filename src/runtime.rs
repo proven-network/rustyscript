@@ -45,7 +45,7 @@ impl Runtime {
     ///
     /// # Example
     /// ```rust
-    /// use rustyscript::{ json_args, Runtime, RuntimeOptions, Module };
+    /// use rustyscript::{json_args, Module, Runtime, RuntimeOptions};
     /// use std::time::Duration;
     ///
     /// # fn main() -> Result<(), rustyscript::Error> {
@@ -57,11 +57,14 @@ impl Runtime {
     ///     ..Default::default()
     /// })?;
     ///
-    /// let module = Module::new("test.js", "
+    /// let module = Module::new(
+    ///     "test.js",
+    ///     "
     ///     export const load = () => {
     ///         return 'Hello World!';
     ///     }
-    /// ");
+    /// ",
+    /// );
     ///
     /// let module_handle = runtime.load_module(&module)?;
     /// let value: String = runtime.call_entrypoint(&module_handle, json_args!())?;
@@ -73,7 +76,6 @@ impl Runtime {
     /// # Errors
     /// Can fail if the tokio runtime cannot be created,  
     /// Or if the deno runtime initialization fails (usually issues with extensions)
-    ///
     pub fn new(options: RuntimeOptions) -> Result<Self, Error> {
         let tokio = AsyncBridge::new(options.timeout)?;
         let inner = InnerRuntime::new(options, tokio.heap_exhausted_token())?;
@@ -197,7 +199,7 @@ impl Runtime {
 
     /// Remove and return a value from the state, if one exists
     /// ```rust
-    /// use rustyscript::{ Runtime };
+    /// use rustyscript::Runtime;
     ///
     /// # fn main() -> Result<(), rustyscript::Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -221,7 +223,7 @@ impl Runtime {
     /// Can fail if the inner state cannot be borrowed mutably
     ///
     /// ```rust
-    /// use rustyscript::{ Runtime };
+    /// use rustyscript::Runtime;
     ///
     /// # fn main() -> Result<(), rustyscript::Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -245,7 +247,7 @@ impl Runtime {
     /// Since this function borrows the state, it can fail if the state cannot be borrowed mutably
     ///
     /// ```rust
-    /// use rustyscript::{ Runtime, Module, serde_json::Value };
+    /// use rustyscript::{serde_json::Value, Module, Runtime};
     ///
     /// # fn main() -> Result<(), rustyscript::Error> {
     /// let module = Module::new("test.js", " rustyscript.functions.foo(); ");
@@ -274,16 +276,15 @@ impl Runtime {
     /// Since this function borrows the state, it can fail if the state cannot be borrowed mutably
     ///
     /// ```rust
-    /// use rustyscript::{ Runtime, Module, serde_json::Value, async_callback, Error };
+    /// use rustyscript::{async_callback, serde_json::Value, Error, Module, Runtime};
     ///
     /// # fn main() -> Result<(), rustyscript::Error> {
     /// let module = Module::new("test.js", " rustyscript.async_functions.add(1, 2); ");
     /// let mut runtime = Runtime::new(Default::default())?;
-    /// runtime.register_async_function("add", async_callback!(
-    ///     |a: i64, b: i64| async move {
-    ///         Ok::<i64, Error>(a + b)
-    ///     }
-    /// ))?;
+    /// runtime.register_async_function(
+    ///     "add",
+    ///     async_callback!(|a: i64, b: i64| async move { Ok::<i64, Error>(a + b) }),
+    /// )?;
     ///
     /// # Ok(())
     /// # }
@@ -325,7 +326,7 @@ impl Runtime {
     ///
     /// # Example
     /// ```rust
-    /// use rustyscript::{ Runtime, Error };
+    /// use rustyscript::{Error, Runtime};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -600,7 +601,7 @@ impl Runtime {
     /// # Example
     ///
     /// ```rust
-    /// use rustyscript::{ json_args, Runtime, Module, Error };
+    /// use rustyscript::{json_args, Error, Module, Runtime};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -649,7 +650,7 @@ impl Runtime {
     /// # Example
     ///
     /// ```rust
-    /// use rustyscript::{ json_args, Runtime, Module, Error };
+    /// use rustyscript::{json_args, Error, Module, Runtime};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -695,7 +696,7 @@ impl Runtime {
     /// # Example
     ///
     /// ```rust
-    /// use rustyscript::{ Runtime, Module, Error };
+    /// use rustyscript::{Error, Module, Runtime};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -767,7 +768,7 @@ impl Runtime {
     /// # Example
     ///
     /// ```rust
-    /// use rustyscript::{ Runtime, Module, Error };
+    /// use rustyscript::{Error, Module, Runtime};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -810,7 +811,7 @@ impl Runtime {
     ///
     /// ```rust
     /// // Create a module with filename and contents
-    /// use rustyscript::{Runtime, Module, Error};
+    /// use rustyscript::{Error, Module, Runtime};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -876,7 +877,7 @@ impl Runtime {
     ///
     /// ```rust
     /// // Create a module with filename and contents
-    /// use rustyscript::{Runtime, Module, Error};
+    /// use rustyscript::{Error, Module, Runtime};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -950,7 +951,7 @@ impl Runtime {
     /// # Example
     ///
     /// ```rust
-    /// use rustyscript::{json_args, Runtime, Module, Error};
+    /// use rustyscript::{json_args, Error, Module, Runtime};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -1036,7 +1037,7 @@ impl Runtime {
     /// # Example
     ///
     /// ```rust
-    /// use rustyscript::{json_args, Runtime, Module, Error};
+    /// use rustyscript::{json_args, Error, Module, Runtime};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let mut runtime = Runtime::new(Default::default())?;
@@ -1090,7 +1091,7 @@ impl Runtime {
     ///
     /// ```rust
     /// // Create a module with filename and contents
-    /// use rustyscript::{json_args, Runtime, Module, Error};
+    /// use rustyscript::{json_args, Error, Module, Runtime};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let module = Module::new("test.js", "export default () => 2");

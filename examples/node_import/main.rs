@@ -4,7 +4,6 @@
 /// 2 node modules are imported in this example:
 /// - `os` from the Deno polyfills to the node standard library
 /// - `chalk` from npm, it will look for a matching package in the node_modules directory
-///
 use rustyscript::{Error, Module, Runtime, RuntimeOptions};
 
 fn main() {
