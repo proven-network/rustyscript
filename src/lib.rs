@@ -286,8 +286,6 @@
 #![allow(clippy::module_name_repetitions)] //   Does not account for crate-level re-exports
 #![allow(clippy::inline_always)] //             Does not account for deno_core's use of inline(always) on op2
 #![allow(clippy::needless_pass_by_value)] //    Disabling some features can trigger this
-#![allow(unused_imports)]
-#![allow(dead_code)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(feature = "snapshot_builder")]
@@ -392,23 +390,24 @@ pub mod extensions {
 #[cfg_attr(docsrs, doc(cfg(feature = "kv")))]
 pub use ext::kv::{KvConfig, KvStore};
 
-#[cfg(feature = "cache")]
-#[cfg_attr(docsrs, doc(cfg(feature = "cache")))]
-pub use ext::cache::CacheBackend;
+//#[cfg(feature = "cache")]
+//#[cfg_attr(docsrs, doc(cfg(feature = "cache")))]
+//pub use ext::cache::CacheBackend;
 
 #[cfg(feature = "node_experimental")]
 #[cfg_attr(docsrs, doc(cfg(feature = "node_experimental")))]
-pub use ext::node::RustyResolver;
+pub use ext::node::resolvers::RustyResolver;
 
 #[cfg(feature = "web")]
 #[cfg_attr(docsrs, doc(cfg(feature = "web")))]
 pub use ext::web::{
-    AllowlistWebPermissions, DefaultWebPermissions, PermissionDenied, SystemsPermissionKind,
+    AllowlistWebPermissions, DefaultWebPermissions, PermissionDeniedError, SystemsPermissionKind,
     WebOptions, WebPermissions,
 };
 pub use ext::ExtensionOptions;
 
 // Expose some important stuff from us
+pub use async_bridge::TokioRuntime;
 pub use error::Error;
 pub use inner_runtime::{RsAsyncFunction, RsFunction};
 pub use module::Module;
@@ -427,8 +426,10 @@ pub use hyper_util;
 
 #[cfg(test)]
 mod test {
-    use crate::{include_module, Error, Module, Runtime, RuntimeOptions};
+    #[cfg(not(feature = "web"))]
+    use crate::{include_module, Module};
 
+    #[cfg(not(feature = "web"))]
     static WHITELIST: Module = include_module!("op_whitelist.js");
 
     #[test]
@@ -459,8 +460,8 @@ mod test {
             let unsafe_ops: Vec<String> = runtime.get_value(Some(&hnd), "unsafe_ops")?;
 
             if !unsafe_ops.is_empty() {
-                println!("Found unsafe ops: {unsafe_ops:?}.\nOnce confirmed safe, add them to `src/op_whitelist.js`");
-                std::process::exit(1);
+                eprintln!("Found unsafe ops: {unsafe_ops:?}.\nOnce confirmed safe, add them to `src/op_whitelist.js`");
+                panic!("Whitelist test failed");
             }
 
             Ok(())

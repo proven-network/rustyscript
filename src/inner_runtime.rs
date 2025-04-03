@@ -126,6 +126,11 @@ pub struct RuntimeOptions {
     pub timeout: Duration,
 
     /// Optional maximum heap size for the runtime
+    ///
+    /// If the heap size is exceeded, the runtime will return a `HeapExhausted` error.
+    ///
+    /// **WARNING** this is not a minimum heap size; the underlying V8 isolate will still crash if this number is too small for startup
+    /// (~5mb with default features)
     pub max_heap_size: Option<usize>,
 
     /// Optional cache provider for the module loader
@@ -210,13 +215,6 @@ impl<RT: RuntimeTrait> InnerRuntime<RT> {
 
             ..Default::default()
         }));
-
-        // Init otel
-        #[cfg(feature = "web")]
-        {
-            let otel_conf = options.extension_options.web.telemetry_config.clone();
-            deno_telemetry::init(deno_lib::version::otel_runtime_config(), otel_conf)?;
-        }
 
         // If a snapshot is provided, do not reload ESM for extensions
         let is_snapshot = options.startup_snapshot.is_some();
@@ -647,33 +645,33 @@ impl<RT: RuntimeTrait> InnerRuntime<RT> {
     {
         // Manually implement tokio::select
         std::future::poll_fn(|cx| {
-            if let Poll::Ready(t) = fut.poll_unpin(cx) {
-                return if let Poll::Ready(Err(e)) =
-                    self.deno_runtime().poll_event_loop(cx, poll_options)
-                {
-                    // Run one more tick to check for errors
+            let evt_status = self.deno_runtime().poll_event_loop(cx, poll_options);
+            let fut_status = fut.poll_unpin(cx);
+
+            match (evt_status, fut_status) {
+                (Poll::Ready(Err(e)), _) => {
+                    // Event loop failed
                     Poll::Ready(Err(e.into()))
-                } else {
-                    // No errors - continue
+                }
+
+                (_, Poll::Pending) => {
+                    // Continue polling
+                    Poll::Pending
+                }
+
+                (_, Poll::Ready(t)) => {
+                    for _ in 0..100 {
+                        if let Poll::Ready(Err(e)) =
+                            self.deno_runtime().poll_event_loop(cx, poll_options)
+                        {
+                            return Poll::Ready(Err(e.into()));
+                        }
+                    }
+
+                    // Future resolved
                     Poll::Ready(t.map_err(Into::into))
-                };
+                }
             }
-
-            if let Poll::Ready(Err(e)) = self.deno_runtime().poll_event_loop(cx, poll_options) {
-                // Event loop failed
-                return Poll::Ready(Err(e.into()));
-            }
-
-            if self
-                .deno_runtime()
-                .poll_event_loop(cx, poll_options)
-                .is_ready()
-            {
-                // Event loop resolved - continue
-                println!("Event loop resolved");
-            }
-
-            Poll::Pending
         })
         .await
     }
@@ -1257,6 +1255,27 @@ mod test_inner_runtime {
             let result: usize = result.resolve(rt.deno_runtime()).await?;
             assert_eq!(2, result);
 
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_deep_error() {
+        let module = Module::new(
+            "test.js",
+            "
+            await new Promise(r => setTimeout(r)); throw 'huh';
+        ",
+        );
+
+        let mut runtime =
+            InnerRuntime::<JsRuntime>::new(RuntimeOptions::default(), CancellationToken::new())
+                .expect("Could not load runtime");
+
+        let rt = &mut runtime;
+        run_async_task(|| async move {
+            let result = rt.load_modules(Some(&module), vec![]).await;
+            assert!(result.is_err());
             Ok(())
         });
     }

@@ -1,5 +1,4 @@
 use super::{DefaultWebPermissions, WebPermissions};
-use deno_core::error::AnyError;
 use deno_fetch::dns::Resolver;
 use hyper_util::client::legacy::Builder;
 use std::sync::Arc;
