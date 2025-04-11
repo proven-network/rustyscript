@@ -650,6 +650,19 @@ impl deno_net::NetPermissions for PermissionsContainer {
         Ok(p)
     }
 
+    fn check_vsock(
+        &mut self,
+        cid: u32,
+        port: u32,
+        api_name: &str,
+    ) -> Result<(), PermissionCheckError> {
+        Err(PermissionCheckError::PermissionDenied(
+            PermissionDeniedError::Fatal {
+                access: "vsock".to_string(),
+            },
+        ))
+    }
+
     fn check_write(&mut self, p: &str, api_name: &str) -> Result<PathBuf, PermissionCheckError> {
         let p = self
             .0
