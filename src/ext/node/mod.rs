@@ -22,12 +22,12 @@ extension!(
 );
 impl ExtensionTrait<()> for init_node {
     fn init((): ()) -> Extension {
-        init_node::init_ops_and_esm()
+        init_node::init()
     }
 }
 impl ExtensionTrait<Arc<RustyResolver>> for deno_node::deno_node {
     fn init(resolver: Arc<RustyResolver>) -> Extension {
-        deno_node::deno_node::init_ops_and_esm::<
+        deno_node::deno_node::init::<
             PermissionsContainer,
             DenoInNpmPackageChecker,
             RustyNpmPackageFolderResolver,

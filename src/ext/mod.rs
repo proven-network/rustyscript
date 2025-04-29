@@ -10,7 +10,7 @@ pub mod rustyscript;
 trait ExtensionTrait<A> {
     fn init(options: A) -> Extension;
 
-    /// Makes a call to `init_ops_and_esm` equivalent to `init_ops`
+    /// Makes a call to `init` equivalent to `init`
     fn set_esm(mut ext: Extension, is_snapshot: bool) -> Extension {
         if is_snapshot {
             ext.js_files = ::std::borrow::Cow::Borrowed(&[]);

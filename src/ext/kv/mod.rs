@@ -15,12 +15,12 @@ extension!(
 );
 impl ExtensionTrait<()> for init_kv {
     fn init((): ()) -> Extension {
-        init_kv::init_ops_and_esm()
+        init_kv::init()
     }
 }
 impl ExtensionTrait<KvStore> for deno_kv::deno_kv {
     fn init(store: KvStore) -> Extension {
-        deno_kv::deno_kv::init_ops_and_esm(store.handler(), store.config())
+        deno_kv::deno_kv::init(store.handler(), store.config())
     }
 }
 

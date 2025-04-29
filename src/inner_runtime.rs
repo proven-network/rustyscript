@@ -143,7 +143,6 @@ pub struct RuntimeOptions {
     /// Optional snapshot to load into the runtime
     ///
     /// This will reduce load times, but requires the same extensions to be loaded as when the snapshot was created
-    /// If provided, user-supplied extensions must be instantiated with `init_ops` instead of `init_ops_and_esm`
     ///
     /// WARNING: Snapshots MUST be used on the same system they were created on
     pub startup_snapshot: Option<&'static [u8]>,
