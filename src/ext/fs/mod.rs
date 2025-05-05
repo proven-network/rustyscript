@@ -1,8 +1,9 @@
+use std::borrow::Cow;
 use std::path::Path;
 
 use super::{web::PermissionsContainer, ExtensionTrait};
 use deno_core::{extension, Extension};
-use deno_fs::FileSystemRc;
+use deno_fs::{CheckedPath, FileSystemRc, GetPath};
 use deno_io::fs::FsError;
 use deno_permissions::{PermissionCheckError, PermissionDeniedError};
 
@@ -33,15 +34,13 @@ pub fn extensions(fs: FileSystemRc, is_snapshot: bool) -> Vec<Extension> {
 impl deno_fs::FsPermissions for PermissionsContainer {
     fn check_open<'a>(
         &mut self,
-        resolved: bool,
         read: bool,
         write: bool,
-        path: &'a std::path::Path,
+        path: Cow<'a, std::path::Path>,
         api_name: &str,
-    ) -> Result<std::borrow::Cow<'a, std::path::Path>, FsError> {
-        self.0
-            .check_open(resolved, read, write, path, api_name)
-            .ok_or(FsError::NotCapable("Access Denied"))
+        get_path: &'a dyn GetPath,
+    ) -> Result<CheckedPath<'a>, FsError> {
+        self.0.check_open(read, write, path, api_name, get_path)
     }
 
     fn check_read(
@@ -62,17 +61,13 @@ impl deno_fs::FsPermissions for PermissionsContainer {
 
     fn check_read_path<'a>(
         &mut self,
-        path: &'a std::path::Path,
+        path: std::borrow::Cow<'a, std::path::Path>,
         api_name: &str,
     ) -> Result<std::borrow::Cow<'a, std::path::Path>, PermissionCheckError> {
         self.0.check_read_all(Some(api_name))?;
-        match self.0.check_read(path, Some(api_name)) {
-            Ok(cow) => Ok(cow),
-            Err(_) => Err(PermissionCheckError::PermissionDenied(
-                PermissionDeniedError::Fatal {
-                    access: "read access".to_string(),
-                },
-            )),
+        match self.0.check_read(&path, Some(api_name)) {
+            Ok(cow) => Ok(std::borrow::Cow::Owned(cow.into_owned())),
+            Err(denied_err) => Err(PermissionCheckError::PermissionDenied(denied_err)),
         }
     }
 
@@ -110,12 +105,12 @@ impl deno_fs::FsPermissions for PermissionsContainer {
 
     fn check_write_path<'a>(
         &mut self,
-        path: &'a std::path::Path,
+        path: std::borrow::Cow<'a, std::path::Path>,
         api_name: &str,
     ) -> Result<std::borrow::Cow<'a, std::path::Path>, PermissionCheckError> {
         self.0.check_write_all(api_name)?;
-        match self.0.check_write(path, Some(api_name)) {
-            Ok(cow) => Ok(cow),
+        match self.0.check_write(&path, Some(api_name)) {
+            Ok(cow) => Ok(std::borrow::Cow::Owned(cow.into_owned())),
             Err(_) => Err(PermissionCheckError::PermissionDenied(
                 PermissionDeniedError::Fatal {
                     access: "write access".to_string(),
