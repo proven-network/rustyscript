@@ -718,6 +718,18 @@ impl deno_fetch::FetchPermissions for PermissionsContainer {
         Ok(())
     }
 
+    fn check_write<'a>(
+        &mut self,
+        path: Cow<'a, Path>,
+        api_name: &str,
+        _get_path: &'a dyn deno_fs::GetPath,
+    ) -> Result<deno_fs::CheckedPath<'a>, FsError> {
+        self.0
+            .check_write(&path, Some(api_name))
+            .map(|p| deno_fs::CheckedPath::Unresolved(Cow::Owned(p.into_owned())))
+            .map_err(|_| FsError::NotCapable("write"))
+    }
+
     fn check_read<'a>(
         &mut self,
         path: Cow<'a, Path>,
