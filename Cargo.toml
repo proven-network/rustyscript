@@ -294,5 +294,8 @@ required-features = ["web"]
 name = "runtime"
 harness = false
 
+[lints.rust]
+warnings = "allow"
+
 [lints.clippy]
 all = "allow"
