@@ -12,6 +12,8 @@ pub use permissions::{
     WebPermissions,
 };
 
+mod tls_ops;
+
 extension!(
     init_fetch,
     deps = [rustyscript],
@@ -44,6 +46,7 @@ impl ExtensionTrait<WebOptions> for deno_fetch::deno_fetch {
 extension!(
     init_net,
     deps = [rustyscript],
+    ops = [tls_ops::op_tls_peer_certificate],
     esm_entry_point = "ext:init_net/init_net.js",
     esm = [ dir "src/ext/web", "init_net.js" ],
 );
