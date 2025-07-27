@@ -228,10 +228,7 @@ map_error!(node_resolver::analyze::TranslateCjsToEsmError, |e| {
 });
 
 map_error!(deno_ast::TranspileError, |e| Error::Runtime(e.to_string()));
-map_error!(deno_core::error::CoreError, |e| match e {
-    CoreError::Js(js_error) => Error::JsError(js_error),
-    _ => Error::Runtime(e.to_string()),
-});
+map_error!(deno_core::error::CoreError, |e| Error::Runtime(e.to_string()));
 map_error!(std::cell::BorrowMutError, |e| Error::Runtime(e.to_string()));
 map_error!(std::io::Error, |e| Error::ModuleNotFound(e.to_string()));
 map_error!(deno_core::v8::DataError, |e| Error::Runtime(e.to_string()));

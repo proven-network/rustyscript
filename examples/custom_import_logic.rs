@@ -6,6 +6,7 @@
 //! - `static:`: This scheme will allow for static modules to be imported by their specifier
 //! - `redirect:`: This scheme will allow for modules to be redirected to a different specifier
 use deno_core::{error::ModuleLoaderError, ModuleSpecifier};
+use deno_error::JsErrorBox;
 use rustyscript::{module_loader::ImportProvider, Module, Runtime, RuntimeOptions};
 use std::collections::HashMap;
 
@@ -51,7 +52,10 @@ impl ImportProvider for MyImportProvider {
                     Some(Ok(specifier.clone()))
                 } else {
                     // Not found - deny the import
-                    Some(Err(ModuleLoaderError::NotFound))
+                    Some(Err(JsErrorBox::generic(format!(
+                        "Module not found: {}",
+                        specifier
+                    ))))
                 }
             }
 
@@ -63,7 +67,10 @@ impl ImportProvider for MyImportProvider {
                     Some(Ok(redirected_specifier.clone()))
                 } else {
                     // No redirect, deny the import
-                    Some(Err(ModuleLoaderError::NotFound))
+                    Some(Err(JsErrorBox::generic(format!(
+                        "Redirect not found: {}",
+                        specifier
+                    ))))
                 }
             }
 
@@ -88,7 +95,10 @@ impl ImportProvider for MyImportProvider {
                     Some(Ok(source.clone()))
                 } else {
                     // Not found, deny the import
-                    Some(Err(ModuleLoaderError::NotFound))
+                    Some(Err(JsErrorBox::generic(format!(
+                        "Static module not found: {}",
+                        specifier
+                    ))))
                 }
             }
 

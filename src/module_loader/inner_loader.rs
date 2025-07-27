@@ -153,7 +153,7 @@ impl InnerRustyLoader {
         let specifier = specifier
             .as_str()
             .to_module_specifier(&self.cwd)
-            .map_err(|e| JsErrorBox::from_err(to_io_err(e)))?;
+            .map_err(|e| JsErrorBox::from_err(e))?;
         let code = code.as_str();
         transpile_extension(&specifier, code)
     }
@@ -167,7 +167,7 @@ impl InnerRustyLoader {
         #[cfg(feature = "node_experimental")]
         let referrer_specifier = referrer
             .to_module_specifier(&self.cwd)
-            .map_err(|e| JsErrorBox::from_err(to_io_err(e)))?;
+            .map_err(|e| JsErrorBox::from_err(e))?;
 
         //
         // Handle import aliasing for node imports
@@ -193,7 +193,8 @@ impl InnerRustyLoader {
         }
 
         // Resolve the module specifier to an absolute URL
-        let url = deno_core::resolve_import(specifier, referrer)?;
+        let url = deno_core::resolve_import(specifier, referrer)
+            .map_err(|e| JsErrorBox::from_err(e))?;
 
         // Check if the module is in the cache
         if self
@@ -454,10 +455,11 @@ impl InnerRustyLoader {
                 "{module_specifier} is not a file path"
             )))
         })?;
-        let content = tokio::fs::read_to_string(path).await?;
+        let content = tokio::fs::read_to_string(path).await
+            .map_err(|e| JsErrorBox::from_err(e))?;
         let content = Self::translate_cjs(inner, module_specifier, content)
             .await
-            .map_err(to_io_err)?;
+            .map_err(|e| JsErrorBox::from_err(e))?;
 
         Ok(content)
     }
@@ -467,10 +469,11 @@ impl InnerRustyLoader {
         _: Rc<RefCell<Self>>,
         module_specifier: ModuleSpecifier,
     ) -> Result<String, ModuleLoaderError> {
-        use crate::utilities::to_io_err;
 
-        let response = reqwest::get(module_specifier).await.map_err(to_io_err)?;
-        Ok(response.text().await.map_err(to_io_err)?)
+        let response = reqwest::get(module_specifier).await
+            .map_err(|e| JsErrorBox::generic(e.to_string()))?;
+        Ok(response.text().await
+            .map_err(|e| JsErrorBox::generic(e.to_string()))?)
     }
 
     /// Loads a module's source code from the cache or from the provided handler
@@ -509,7 +512,8 @@ impl InnerRustyLoader {
 
         // Load the module code, and transpile it if necessary
         let code = handler(inner.clone(), module_specifier.clone()).await?;
-        let (tcode, source_map) = transpile(&module_specifier, &code).map_err(to_io_err)?;
+        let (tcode, source_map) = transpile(&module_specifier, &code)
+            .map_err(|e| JsErrorBox::from_err(e))?;
 
         // Create the module source
         let mut source = ModuleSource::new(
@@ -537,9 +541,7 @@ impl InnerRustyLoader {
             source = import_provider
                 .post_process(&module_specifier, source)
                 .map_err(|e| {
-                    deno_core::error::ModuleLoaderError::Core(deno_core::error::CoreError::Io(
-                        std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
-                    ))
+                    JsErrorBox::from_err(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
                 })?;
         }
 

@@ -426,7 +426,7 @@ pub use hyper_util;
 #[cfg(test)]
 mod test {
     #[cfg(not(feature = "web"))]
-    use crate::{include_module, Module};
+    use crate::{include_module, Error, Module, Runtime, RuntimeOptions};
 
     #[cfg(not(feature = "web"))]
     static WHITELIST: Module = include_module!("op_whitelist.js");
