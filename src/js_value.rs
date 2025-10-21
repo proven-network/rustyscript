@@ -3,8 +3,10 @@
 //!
 //! [Function] and [Promise] are both specializations of [Value] providing deserialize-time type checking
 //! and additional utility functions for interacting with the runtime
-use deno_core::serde_v8::GlobalValue;
-use deno_core::v8::{self, HandleScope};
+use deno_core::{
+    serde_v8::GlobalValue,
+    v8::{self, HandleScope},
+};
 use serde::Deserialize;
 
 /// A macro to implement the common functions for [Function], [Promise], and [Value]
@@ -37,8 +39,8 @@ macro_rules! impl_v8 {
             /// # Errors
             /// Will return an error if the value is the wrong type
             /// For `Value`, this check cannot fail
-            pub fn try_from_v8<'a, H>(
-                scope: &mut v8::HandleScope<'a>,
+            pub fn try_from_v8<'a, 'i, H>(
+                scope: &mut v8::PinScope<'a, 'i>,
                 value: v8::Global<H>,
             ) -> Result<Self, crate::Error>
             where
@@ -159,7 +161,10 @@ pub(crate) struct V8Value<V8TypeChecker>(
 
 impl<T: V8TypeChecker> V8Value<T> {
     /// Returns the underlying global as a local in the type configured by the type checker
-    pub(crate) fn as_local<'a>(&self, scope: &mut HandleScope<'a>) -> v8::Local<'a, T::Output>
+    pub(crate) fn as_local<'a, 'i>(
+        &self,
+        scope: &mut v8::PinScope<'a, 'i>,
+    ) -> v8::Local<'a, T::Output>
     where
         v8::Local<'a, T::Output>: TryFrom<v8::Local<'a, v8::Value>>,
     {
@@ -170,7 +175,10 @@ impl<T: V8TypeChecker> V8Value<T> {
     }
 
     /// Returns the underlying global in the type configured by the type checker
-    pub(crate) fn as_global<'a>(&self, scope: &mut HandleScope<'a>) -> v8::Global<T::Output>
+    pub(crate) fn as_global<'a, 'i>(
+        &self,
+        scope: &mut v8::PinScope<'a, 'i>,
+    ) -> v8::Global<T::Output>
     where
         v8::Local<'a, T::Output>: TryFrom<v8::Local<'a, v8::Value>>,
     {
@@ -209,9 +217,10 @@ impl Value {
     where
         T: serde::de::DeserializeOwned,
     {
-        let mut scope = runtime.deno_runtime().handle_scope();
-        let local = self.0.as_local(&mut scope);
-        Ok(deno_core::serde_v8::from_v8(&mut scope, local)?)
+        let rt = runtime.deno_runtime();
+        deno_core::scope!(scope, rt);
+        let local = self.0.as_local(scope);
+        Ok(deno_core::serde_v8::from_v8(scope, local)?)
     }
 
     /// Contructs a new Value from a `v8::Value` global
@@ -257,11 +266,17 @@ mod test {
 
         let g: Value = runtime.get_value(Some(&handle), "g").unwrap();
         let global = g.into_v8();
-        let _f = Function::try_from_v8(&mut runtime.deno_runtime().handle_scope(), global.clone())
-            .unwrap();
+        {
+            let rt = runtime.deno_runtime();
+            deno_core::scope!(scope, rt);
+            let _f = Function::try_from_v8(scope, global.clone()).unwrap();
+        }
         let f = unsafe { Function::from_v8_unchecked(global) };
-        let _f = f
-            .into_inner()
-            .as_local(&mut runtime.deno_runtime().handle_scope());
+        {
+            let rt = runtime.deno_runtime();
+            deno_core::scope!(scope, rt);
+            let _local = f.into_inner().as_local(scope);
+            // Use the local value within the scope
+        }
     }
 }

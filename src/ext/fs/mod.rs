@@ -1,12 +1,10 @@
-use std::borrow::Cow;
-use std::path::Path;
+use std::{borrow::Cow, path::Path};
 
-use super::{web::PermissionsContainer, ExtensionTrait};
 use deno_core::{extension, Extension};
 use deno_fs::FileSystemRc;
-use deno_io::fs::FsError;
-use deno_permissions::{CheckedPath, OpenAccessKind};
-use deno_permissions::{PermissionCheckError, PermissionDeniedError};
+use deno_permissions::{CheckedPath, PermissionCheckError, PermissionDeniedError};
+
+use super::{web::PermissionsContainer, ExtensionTrait};
 
 extension!(
     init_fs,
@@ -36,25 +34,46 @@ impl deno_fs::FsPermissions for PermissionsContainer {
     fn check_open<'a>(
         &self,
         path: Cow<'a, Path>,
-        access_kind: OpenAccessKind,
+        access_kind: deno_permissions::OpenAccessKind,
         api_name: &str,
     ) -> Result<CheckedPath<'a>, PermissionCheckError> {
-        self.0.check_open(path, access_kind, api_name)
+        let read = access_kind.is_read();
+        let write = access_kind.is_write();
+
+        let p = self.0.check_open(true, read, write, path, api_name).ok_or(
+            PermissionCheckError::PermissionDenied(PermissionDeniedError {
+                access: api_name.to_string(),
+                name: "open",
+                custom_message: None,
+            }),
+        )?;
+
+        Ok(CheckedPath::unsafe_new(p))
     }
 
     fn check_open_blind<'a>(
         &self,
         path: Cow<'a, Path>,
-        access_kind: OpenAccessKind,
+        access_kind: deno_permissions::OpenAccessKind,
         display: &str,
         api_name: &str,
     ) -> Result<CheckedPath<'a>, PermissionCheckError> {
-        self.0
-            .check_open_blind(path, access_kind, display, api_name)
+        if access_kind.is_read() {
+            self.0.check_read_all(Some(api_name))?;
+            self.0.check_read_blind(&path, display, api_name)?;
+        }
+
+        if access_kind.is_write() {
+            self.0.check_write_all(api_name)?;
+            self.0.check_write_blind(&path, display, api_name)?;
+        }
+
+        Ok(CheckedPath::unsafe_new(path))
     }
 
     fn check_read_all(&self, api_name: &str) -> Result<(), PermissionCheckError> {
-        self.0.check_read_all(api_name)
+        self.0.check_read_all(Some(api_name))?;
+        Ok(())
     }
 
     fn check_write_partial<'a>(
@@ -62,10 +81,14 @@ impl deno_fs::FsPermissions for PermissionsContainer {
         path: Cow<'a, Path>,
         api_name: &str,
     ) -> Result<CheckedPath<'a>, PermissionCheckError> {
-        self.0.check_write_partial(path, api_name)
+        self.0.check_write_all(api_name)?;
+        let p = self.0.check_write_partial(path, api_name)?;
+
+        Ok(CheckedPath::unsafe_new(p))
     }
 
     fn check_write_all(&self, api_name: &str) -> Result<(), PermissionCheckError> {
-        self.0.check_write_all(api_name)
+        self.0.check_write_all(api_name)?;
+        Ok(())
     }
 }

@@ -1,6 +1,7 @@
-use super::V8Value;
-use deno_core::v8::{self, HandleScope};
+use deno_core::v8;
 use serde::Deserialize;
+
+use super::V8Value;
 
 /// A Deserializable javascript function, that can be stored and used later
 /// Must live as long as the runtime it was birthed from
@@ -12,7 +13,7 @@ impl_checker!(FunctionTypeChecker, Function, is_function, |e| {
 });
 
 impl Function {
-    pub(crate) fn as_global(&self, scope: &mut HandleScope<'_>) -> v8::Global<v8::Function> {
+    pub(crate) fn as_global<'a, 'i>(&self, scope: &mut v8::PinScope<'a, 'i>) -> v8::Global<v8::Function> {
         self.0.as_global(scope)
     }
 

@@ -1,9 +1,11 @@
 //! Contains the error type for the runtime
 //! And some associated utilities
-use crate::Module;
-use deno_core::error::CoreError;
 use std::path::PathBuf;
+
+use deno_core::error::CoreErrorKind;
 use thiserror::Error;
+
+use crate::Module;
 
 /// Options for [`Error::as_highlighted`]
 #[allow(clippy::struct_excessive_bools)]
@@ -86,7 +88,7 @@ pub enum Error {
     /// Runtime error we successfully downcast
     #[class(generic)]
     #[error("{0}")]
-    JsError(#[from] deno_core::error::JsError),
+    JsError(Box<deno_core::error::JsError>),
 
     /// Triggers when a module times out before finishing
     #[class(generic)]
@@ -97,6 +99,18 @@ pub enum Error {
     #[class(generic)]
     #[error("Heap exhausted")]
     HeapExhausted,
+}
+
+impl From<deno_core::error::JsError> for Error {
+    fn from(err: deno_core::error::JsError) -> Self {
+        Self::JsError(Box::new(err))
+    }
+}
+
+impl From<Box<deno_core::error::JsError>> for Error {
+    fn from(err: Box<deno_core::error::JsError>) -> Self {
+        Self::JsError(err)
+    }
 }
 
 impl Error {
@@ -228,7 +242,13 @@ map_error!(node_resolver::analyze::TranslateCjsToEsmError, |e| {
 });
 
 map_error!(deno_ast::TranspileError, |e| Error::Runtime(e.to_string()));
-map_error!(deno_core::error::CoreError, |e| Error::Runtime(e.to_string()));
+map_error!(deno_core::error::CoreError, |e| {
+    let e = e.into_kind();
+    match e {
+        CoreErrorKind::Js(js_error) => Error::JsError(js_error),
+        _ => Error::Runtime(e.to_string()),
+    }
+});
 map_error!(std::cell::BorrowMutError, |e| Error::Runtime(e.to_string()));
 map_error!(std::io::Error, |e| Error::ModuleNotFound(e.to_string()));
 map_error!(deno_core::v8::DataError, |e| Error::Runtime(e.to_string()));

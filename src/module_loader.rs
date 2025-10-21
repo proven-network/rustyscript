@@ -1,18 +1,19 @@
 //! Module loader implementation for rustyscript
 //! This module provides tools for caching module data, resolving module specifiers, and loading modules
 #![allow(deprecated)]
-use deno_core::{error::ModuleLoaderError, ModuleLoader, ModuleSpecifier};
+
 use std::{borrow::Cow, cell::RefCell, path::PathBuf, rc::Rc};
 
-mod cache_provider;
-mod import_provider;
-mod inner_loader;
+use deno_core::{error::ModuleLoaderError, ModuleLoader, ModuleLoadReferrer, ModuleSpecifier};
 
+mod inner_loader;
 use inner_loader::InnerRustyLoader;
 pub(crate) use inner_loader::LoaderOptions;
 
-// Public exports
+mod cache_provider;
 pub use cache_provider::{ClonableSource, ModuleCacheProvider};
+
+mod import_provider;
 pub use import_provider::ImportProvider;
 
 use crate::transpiler::ExtensionTranspiler;
@@ -34,11 +35,11 @@ impl RustyLoader {
         self.inner_mut().set_current_dir(current_dir);
     }
 
-    fn inner(&self) -> std::cell::Ref<InnerRustyLoader> {
+    fn inner(&self) -> std::cell::Ref<'_, InnerRustyLoader> {
         self.inner.borrow()
     }
 
-    fn inner_mut(&self) -> std::cell::RefMut<InnerRustyLoader> {
+    fn inner_mut(&self) -> std::cell::RefMut<'_, InnerRustyLoader> {
         self.inner.borrow_mut()
     }
 
@@ -89,7 +90,7 @@ impl ModuleLoader for RustyLoader {
     fn load(
         &self,
         module_specifier: &ModuleSpecifier,
-        maybe_referrer: Option<&ModuleSpecifier>,
+        maybe_referrer: Option<&ModuleLoadReferrer>,
         is_dyn_import: bool,
         requested_module_type: deno_core::RequestedModuleType,
     ) -> deno_core::ModuleLoadResponse {
@@ -97,13 +98,13 @@ impl ModuleLoader for RustyLoader {
         InnerRustyLoader::load(
             inner,
             module_specifier,
-            maybe_referrer,
+            maybe_referrer.map(|r| &r.specifier),
             is_dyn_import,
             requested_module_type,
         )
     }
 
-    fn get_source_map(&self, file_name: &str) -> Option<Cow<[u8]>> {
+    fn get_source_map(&self, file_name: &str) -> Option<Cow<'_, [u8]>> {
         let inner = self.inner();
         let map = inner.get_source_map(file_name)?.1.as_deref()?;
         Some(Cow::Owned(map.to_vec()))

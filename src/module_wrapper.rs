@@ -1,5 +1,6 @@
+use deno_core::{serde_json, v8, v8::GetPropertyNamesArgs};
+
 use crate::{js_value::Function, Error, Module, ModuleHandle, Runtime, RuntimeOptions};
-use deno_core::{serde_json, v8::GetPropertyNamesArgs};
 
 /// A wrapper type representing a runtime instance loaded with a single module
 ///
@@ -290,15 +291,15 @@ impl ModuleWrapper {
             .deno_runtime()
             .get_module_namespace(self.module_context.id())
         {
-            let mut scope = self.runtime.deno_runtime().handle_scope();
-            let global = namespace.open(&mut scope);
+            deno_core::scope!(scope, &mut *self.runtime.deno_runtime());
+            let global = namespace.open(scope);
             if let Some(keys_obj) =
-                global.get_property_names(&mut scope, GetPropertyNamesArgs::default())
+                global.get_property_names(scope, GetPropertyNamesArgs::default())
             {
                 for i in 0..keys_obj.length() {
-                    if let Ok(key_index) = deno_core::serde_v8::to_v8(&mut scope, i) {
-                        if let Some(key_name_v8) = keys_obj.get(&mut scope, key_index) {
-                            let name = key_name_v8.to_rust_string_lossy(&mut scope);
+                    if let Ok(key_index) = deno_core::serde_v8::to_v8(scope, i) {
+                        if let Some(key_name_v8) = keys_obj.get(scope, key_index) {
+                            let name = key_name_v8.to_rust_string_lossy(scope);
                             keys.push(name);
                         }
                     }

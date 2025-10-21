@@ -1,7 +1,8 @@
-use crate::traits::ToModuleSpecifier;
-use crate::{Error, Module, ModuleWrapper, Runtime, RuntimeOptions};
-use deno_core::ModuleSpecifier;
 use std::path::Path;
+
+use deno_core::ModuleSpecifier;
+
+use crate::{traits::ToModuleSpecifier, Error, Module, ModuleWrapper, Runtime, RuntimeOptions};
 
 /// Evaluate a piece of non-ECMAScript-module JavaScript code
 ///
@@ -121,13 +122,6 @@ pub fn resolve_path(
 pub fn init_platform(thread_pool_size: u32, idle_task_support: bool) {
     let platform = deno_core::v8::Platform::new(thread_pool_size, idle_task_support);
     deno_core::JsRuntime::init_platform(Some(platform.into()), true);
-}
-
-pub fn to_io_err<E>(e: E) -> std::io::Error
-where
-    E: Into<Box<dyn std::error::Error + Send + Sync>>,
-{
-    std::io::Error::new(std::io::ErrorKind::Other, e)
 }
 
 #[macro_use]

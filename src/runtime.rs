@@ -1,12 +1,14 @@
+use std::{path::Path, rc::Rc, time::Duration};
+
+use deno_core::PollEventLoopOptions;
+use tokio_util::sync::CancellationToken;
+
 use crate::{
     async_bridge::{AsyncBridge, AsyncBridgeExt, TokioRuntime},
     inner_runtime::{InnerRuntime, RsAsyncFunction, RsFunction},
     js_value::Function,
     Error, Module, ModuleHandle,
 };
-use deno_core::PollEventLoopOptions;
-use std::{path::Path, rc::Rc, time::Duration};
-use tokio_util::sync::CancellationToken;
 
 /// Represents the set of options accepted by the runtime constructor
 pub use crate::inner_runtime::RuntimeOptions;
@@ -162,7 +164,7 @@ impl Runtime {
     }
 
     /// Advance the JS event loop by a single tick  
-    /// See [`Runtime::await_event_loop`] for fully running the event loop
+    /// See [`Runtime::block_on_event_loop`] for fully running the event loop
     ///
     /// Returns true if the event loop has pending work, or false if it has completed
     ///
@@ -173,6 +175,24 @@ impl Runtime {
     /// Can fail if a runtime error occurs during the event loop's execution
     pub fn advance_event_loop(&mut self, options: PollEventLoopOptions) -> Result<bool, Error> {
         self.block_on(|runtime| async move { runtime.inner.advance_event_loop(options).await })
+    }
+
+    /// Advance the JS event loop by a single tick  
+    /// See [`Runtime::await_event_loop`] for fully running the event loop
+    ///
+    /// Returns a future that resolves true if the event loop has pending work, or false if it
+    /// has completed
+    ///
+    /// # Arguments
+    /// * `options` - Options for the event loop polling, see [`deno_core::PollEventLoopOptions`]
+    ///
+    /// # Errors
+    /// Can fail if a runtime error occurs during the event loop's execution
+    pub async fn advance_event_loop_async(
+        &mut self,
+        options: PollEventLoopOptions,
+    ) -> Result<bool, Error> {
+        self.inner.advance_event_loop(options).await
     }
 
     /// Run the JS event loop to completion, or until a timeout is reached  
@@ -472,7 +492,11 @@ impl Runtime {
     where
         T: serde::de::DeserializeOwned,
     {
-        let function = function.as_global(&mut self.deno_runtime().handle_scope());
+        let function = {
+            let rt = self.deno_runtime();
+            deno_core::scope!(scope, rt);
+            function.as_global(scope)
+        };
         let result = self
             .inner
             .call_function_by_ref(module_context, &function, args)?;
@@ -545,7 +569,11 @@ impl Runtime {
     where
         T: deno_core::serde::de::DeserializeOwned,
     {
-        let function = function.as_global(&mut self.deno_runtime().handle_scope());
+        let function = {
+            let rt = self.deno_runtime();
+            deno_core::scope!(scope, rt);
+            function.as_global(scope)
+        };
         let result = self
             .inner
             .call_function_by_ref(module_context, &function, args)?;

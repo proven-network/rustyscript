@@ -52,10 +52,7 @@ impl ImportProvider for MyImportProvider {
                     Some(Ok(specifier.clone()))
                 } else {
                     // Not found - deny the import
-                    Some(Err(JsErrorBox::generic(format!(
-                        "Module not found: {}",
-                        specifier
-                    ))))
+                    Some(Err(ModuleLoaderError::not_supported()))
                 }
             }
 
@@ -67,10 +64,7 @@ impl ImportProvider for MyImportProvider {
                     Some(Ok(redirected_specifier.clone()))
                 } else {
                     // No redirect, deny the import
-                    Some(Err(JsErrorBox::generic(format!(
-                        "Redirect not found: {}",
-                        specifier
-                    ))))
+                    Some(Err(ModuleLoaderError::not_supported()))
                 }
             }
 
@@ -95,10 +89,7 @@ impl ImportProvider for MyImportProvider {
                     Some(Ok(source.clone()))
                 } else {
                     // Not found, deny the import
-                    Some(Err(JsErrorBox::generic(format!(
-                        "Static module not found: {}",
-                        specifier
-                    ))))
+                    Some(Err(ModuleLoaderError::not_supported()))
                 }
             }
 

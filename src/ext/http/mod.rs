@@ -1,5 +1,6 @@
-use super::ExtensionTrait;
 use deno_core::{extension, Extension};
+
+use super::ExtensionTrait;
 
 mod http_runtime;
 use http_runtime::deno_http_runtime;
@@ -25,6 +26,7 @@ impl ExtensionTrait<()> for deno_http::deno_http {
         deno_http::deno_http::init(deno_http::Options {
             http2_builder_hook: None,
             http1_builder_hook: None,
+            no_legacy_abort: false,
         })
     }
 }

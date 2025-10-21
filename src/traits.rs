@@ -1,7 +1,11 @@
+use std::{borrow::Cow, path::Path};
+
+use deno_core::{
+    v8::{self, HandleScope},
+    ModuleSpecifier,
+};
+
 use crate::Error;
-use deno_core::v8::{self, HandleScope};
-use deno_core::ModuleSpecifier;
-use std::path::Path;
 
 /// Converts a string representing a relative or absolute path into a
 /// `ModuleSpecifier`. A relative path is considered relative to the passed
@@ -13,7 +17,7 @@ fn resolve_path(
     current_dir: &Path,
 ) -> Result<ModuleSpecifier, deno_core::ModuleResolutionError> {
     let path = current_dir.join(path_str);
-    let path = deno_core::normalize_path(path);
+    let path = deno_core::normalize_path(Cow::Owned(path));
     deno_core::url::Url::from_file_path(&path).map_err(|()| {
         deno_core::ModuleResolutionError::InvalidUrl(
             deno_core::url::ParseError::RelativeUrlWithoutBase,
@@ -32,16 +36,16 @@ impl<T: AsRef<Path>> ToModuleSpecifier for T {
 }
 
 pub trait ToV8String {
-    fn to_v8_string<'a>(
+    fn to_v8_string<'a, 'i>(
         &self,
-        scope: &mut HandleScope<'a>,
+        scope: &mut v8::PinScope<'a, 'i>,
     ) -> Result<v8::Local<'a, v8::String>, Error>;
 }
 
 impl ToV8String for str {
-    fn to_v8_string<'a>(
+    fn to_v8_string<'a, 'i>(
         &self,
-        scope: &mut HandleScope<'a>,
+        scope: &mut v8::PinScope<'a, 'i>,
     ) -> Result<v8::Local<'a, v8::String>, Error> {
         v8::String::new(scope, self).ok_or(Error::V8Encoding(self.to_string()))
     }

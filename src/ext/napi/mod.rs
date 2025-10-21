@@ -1,5 +1,8 @@
-use super::{web::PermissionsContainer, ExtensionTrait};
+use std::borrow::Cow;
+
 use deno_core::{extension, Extension};
+
+use super::{web::PermissionsContainer, ExtensionTrait};
 
 extension!(
     init_napi,
@@ -14,7 +17,7 @@ impl ExtensionTrait<()> for init_napi {
 }
 impl ExtensionTrait<()> for deno_napi::deno_napi {
     fn init((): ()) -> Extension {
-        deno_napi::deno_napi::init::<PermissionsContainer>()
+        deno_napi::deno_napi::init::<PermissionsContainer>(None)
     }
 }
 
@@ -26,11 +29,11 @@ pub fn extensions(is_snapshot: bool) -> Vec<Extension> {
 }
 
 impl deno_napi::NapiPermissions for PermissionsContainer {
-    fn check(
+    fn check<'a>(
         &mut self,
-        path: &str,
-    ) -> Result<std::path::PathBuf, deno_permissions::PermissionCheckError> {
-        let p = self.0.check_read(std::path::Path::new(path), None)?;
-        Ok(p.to_path_buf())
+        path: Cow<'a, std::path::Path>,
+    ) -> Result<Cow<'a, std::path::Path>, deno_permissions::PermissionCheckError> {
+        let p = self.0.check_read(path, None)?;
+        Ok(p)
     }
 }

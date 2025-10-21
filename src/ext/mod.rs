@@ -1,5 +1,6 @@
 #![allow(unused_variables)]
 #![allow(clippy::derivable_impls)]
+
 use deno_core::{
     v8::{BackingStore, SharedRef},
     CrossIsolateStore, Extension,
@@ -10,20 +11,23 @@ pub mod rustyscript;
 trait ExtensionTrait<A> {
     fn init(options: A) -> Extension;
 
-    /// Makes a call to `init` equivalent to `init`
-    fn set_esm(mut ext: Extension, is_snapshot: bool) -> Extension {
-        if is_snapshot {
-            ext.js_files = ::std::borrow::Cow::Borrowed(&[]);
-            ext.esm_files = ::std::borrow::Cow::Borrowed(&[]);
-            ext.esm_entry_point = ::std::option::Option::None;
-        }
+    // Clears the js and esm files for warmup to avoid reloading them
+    fn for_warmup(mut ext: Extension) -> Extension {
+        ext.js_files = ::std::borrow::Cow::Borrowed(&[]);
+        ext.esm_files = ::std::borrow::Cow::Borrowed(&[]);
+        ext.esm_entry_point = ::std::option::Option::None;
+
         ext
     }
 
     /// Builds an extension
     fn build(options: A, is_snapshot: bool) -> Extension {
-        let ext = Self::init(options);
-        Self::set_esm(ext, is_snapshot)
+        let ext: Extension = Self::init(options);
+        if is_snapshot {
+            Self::for_warmup(ext)
+        } else {
+            ext
+        }
     }
 }
 

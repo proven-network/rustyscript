@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+
 use std::{future::Future, pin::Pin, rc::Rc};
 
 use crate::Error;
@@ -11,10 +12,10 @@ pub trait RsStoredCallback: 'static {
         args: deno_core::serde_json::Value,
     ) -> Pin<Box<dyn Future<Output = Result<deno_core::serde_json::Value, Error>>>>;
 
-    fn encode_args(
+    fn encode_args<'a>(
         &self,
         args: v8::Global<v8::Value>,
-        scope: &mut v8::HandleScope<'_>,
+        scope: &mut v8::ContextScope<'a, 'a, v8::HandleScope<'a>>,
     ) -> Result<deno_core::serde_json::Value, Error>;
 }
 
@@ -31,21 +32,21 @@ pub trait RsCallback: 'static {
     /// Convert a series of `v8::Value` objects into a tuple of arguments
     fn args_from_v8(
         args: Vec<v8::Global<v8::Value>>,
-        scope: &mut v8::HandleScope,
+        scope: &mut v8::ContextScope<'_, '_, v8::HandleScope<'_>>,
     ) -> Result<Self::Arguments, Error>;
 
     fn slow_args_from_v8(
         args: Vec<v8::Global<v8::Value>>,
-        scope: &mut v8::HandleScope,
+        scope: &mut v8::ContextScope<'_, '_, v8::HandleScope<'_>>,
     ) -> Result<deno_core::serde_json::Value, Error> {
         let args = Self::args_from_v8(args, scope)?;
         deno_core::serde_json::to_value(args).map_err(Error::from)
     }
 
     /// Convert a series of `v8::Value` objects into a tuple of arguments
-    fn decode_v8(
+    fn decode_v8<'a, 'b>(
         args: v8::Global<v8::Value>,
-        scope: &mut v8::HandleScope,
+        scope: &mut v8::ContextScope<'b, 'a, v8::HandleScope<'a>>,
     ) -> Result<Self::Arguments, Error> {
         let args = v8::Local::new(scope, args);
         let args = if args.is_array() {
@@ -75,9 +76,9 @@ pub trait RsCallback: 'static {
     }
 
     /// Call the function
-    async fn call(
+    async fn call<'a>(
         args: v8::Global<v8::Value>,
-        scope: &mut v8::HandleScope<'_>,
+        scope: &mut v8::ContextScope<'a, 'a, v8::HandleScope<'a>>,
     ) -> Result<Self::Return, Error> {
         let args = Self::decode_v8(args, scope)?;
         Self::body(args).await
@@ -96,7 +97,7 @@ macro_rules! codegen_function {
 
                 fn args_from_v8(
                     args: Vec<v8::Global<v8::Value>>,
-                    scope: &mut v8::HandleScope,
+                    scope: &mut v8::ContextScope<'_, '_, v8::HandleScope<'_>>,
                 ) -> Result<Self::Arguments, $crate::Error> {
                     let mut args = args.into_iter();
                     $(
@@ -122,7 +123,7 @@ macro_rules! codegen_function {
                     })
                 }
 
-                fn encode_args(&self, args: $crate::deno_core::v8::Global<$crate::deno_core::v8::Value>, scope: &mut $crate::deno_core::v8::HandleScope<'_>) -> Result<$crate::deno_core::serde_json::Value, $crate::Error> {
+                fn encode_args<'a>(&self, args: $crate::deno_core::v8::Global<$crate::deno_core::v8::Value>, scope: &mut $crate::deno_core::v8::ContextScope<'a, 'a, $crate::deno_core::v8::HandleScope<'a>>) -> Result<$crate::deno_core::serde_json::Value, $crate::Error> {
                     let args = Self::decode_v8(args, scope)?;
                     Ok($crate::serde_json::to_value(args)?)
                 }

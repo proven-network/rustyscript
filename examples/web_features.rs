@@ -1,10 +1,11 @@
-use rustyscript::{json_args, Error, Module, Runtime, RuntimeOptions};
-///
-/// This example shows features requiring the 'web' feature to work
-/// Stuff like setTimeout, atob/btoa, file reads and fetch are all examples
-///
-/// We will focus on timers and fetch here
+//!
+//! This example shows features requiring the 'web' feature to work
+//! Stuff like setTimeout, atob/btoa, file reads and fetch are all examples
+//!
+//! We will focus on timers and fetch here
 use std::time::Duration;
+
+use rustyscript::{json_args, Error, Module, Runtime, RuntimeOptions};
 
 fn main() -> Result<(), Error> {
     // This module has an async function, which is not itself a problem
@@ -56,7 +57,7 @@ fn main() -> Result<(), Error> {
     // The async function
     let module_handle = runtime.load_module(&module)?;
     let value: usize = runtime.call_function(Some(&module_handle), "test", json_args!())?;
-    println!("Got value: {}", value);
+    println!("Got value: {value}");
     assert_eq!(value, 2);
 
     // Fetch example
@@ -67,7 +68,7 @@ fn main() -> Result<(), Error> {
     // EventSource example
     let data: rustyscript::serde_json::Value =
         runtime.call_function(Some(&module_handle), "event_source_example", json_args!())?;
-    println!("Got event: {}", data);
+    println!("Got event: {data}");
 
     Ok(())
 }

@@ -1,6 +1,8 @@
-use super::ExtensionTrait;
-use deno_core::{extension, Extension};
 use std::sync::Arc;
+
+use deno_core::{extension, Extension};
+
+use super::ExtensionTrait;
 
 mod options;
 pub use options::WebOptions;
@@ -8,11 +10,20 @@ pub use options::WebOptions;
 mod permissions;
 pub(crate) use permissions::PermissionsContainer;
 pub use permissions::{
-    AllowlistWebPermissions, DefaultWebPermissions, PermissionDeniedError, SystemsPermissionKind,
-    WebPermissions,
+    AllowlistWebPermissions, CheckedPath, DefaultWebPermissions, PermissionCheckError,
+    PermissionDeniedError, SystemsPermissionKind, WebPermissions,
 };
 
-mod tls_ops;
+/// Stub for a node op deno_net expects to find
+/// We return None to show no cert available
+#[deno_core::op2]
+#[serde]
+pub fn op_tls_peer_certificate(
+    #[smi] _rid: u32,
+    _detailed: bool,
+) -> Option<deno_core::serde_json::Value> {
+    None
+}
 
 extension!(
     init_fetch,
@@ -43,6 +54,16 @@ impl ExtensionTrait<WebOptions> for deno_fetch::deno_fetch {
     }
 }
 
+#[cfg(not(feature = "node_experimental"))]
+extension!(
+    init_net,
+    deps = [rustyscript],
+    ops = [op_tls_peer_certificate],
+    esm_entry_point = "ext:init_net/init_net.js",
+    esm = [ dir "src/ext/web", "init_net.js" ],
+);
+
+#[cfg(feature = "node_experimental")]
 extension!(
     init_net,
     deps = [rustyscript],
@@ -50,8 +71,11 @@ extension!(
     esm_entry_point = "ext:init_net/init_net.js",
     esm = [ dir "src/ext/web", "init_net.js" ],
 );
+
 impl ExtensionTrait<WebOptions> for init_net {
     fn init(options: WebOptions) -> Extension {
+        let provider = rustls::crypto::aws_lc_rs::default_provider();
+        let _ = rustls::crypto::CryptoProvider::install_default(provider); // Failure means already done for us
         init_net::init()
     }
 }
